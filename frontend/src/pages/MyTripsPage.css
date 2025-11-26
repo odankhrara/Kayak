@@ -1,0 +1,76 @@
+.my-trips-page {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.my-trips-page h2 {
+  color: var(--primary-color);
+  margin-bottom: 2rem;
+}
+
+.no-trips {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.trips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.trip-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.trip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.trip-header h3 {
+  margin: 0;
+  color: var(--primary-color);
+}
+
+.status-badge {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.status-confirmed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-cancelled {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.status-completed {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+.trip-details p {
+  margin: 0.5rem 0;
+  color: var(--dark-text);
+}
+

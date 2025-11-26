@@ -1,0 +1,46 @@
+.results-page {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.results-header {
+  margin-bottom: 2rem;
+}
+
+.results-header h2 {
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.results-layout {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 2rem;
+}
+
+.results-filters {
+  position: sticky;
+  top: 100px;
+  height: fit-content;
+}
+
+.results-list {
+  min-height: 400px;
+}
+
+.no-results {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+@media (max-width: 968px) {
+  .results-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .results-filters {
+    position: static;
+  }
+}
+

@@ -1,0 +1,131 @@
+.result-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.result-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.result-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.result-card-header h3 {
+  margin: 0;
+  color: var(--primary-color);
+}
+
+.result-price {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--secondary-color);
+}
+
+.result-card-body {
+  margin-bottom: 1rem;
+}
+
+.result-route {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.route-segment {
+  flex: 1;
+}
+
+.route-time {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: var(--dark-text);
+}
+
+.route-location {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.route-arrow {
+  font-size: 1.5rem;
+  color: var(--primary-color);
+}
+
+.result-location p {
+  margin: 0.25rem 0;
+  color: #666;
+}
+
+.result-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  color: #ffc107;
+}
+
+.rating-number {
+  color: var(--dark-text);
+  font-weight: 500;
+}
+
+.result-amenities,
+.result-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.amenity-tag,
+.feature-tag {
+  background-color: var(--light-bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--dark-text);
+}
+
+.result-availability {
+  margin-top: 0.5rem;
+}
+
+.available {
+  color: var(--success-color);
+  font-weight: 500;
+}
+
+.unavailable {
+  color: var(--danger-color);
+  font-weight: 500;
+}
+
+.result-details {
+  display: flex;
+  gap: 1rem;
+  color: #666;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.result-card-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.result-card-footer button {
+  padding: 0.75rem 2rem;
+}
+

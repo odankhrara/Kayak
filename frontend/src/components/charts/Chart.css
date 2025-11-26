@@ -1,0 +1,13 @@
+.chart-container {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
+}
+
+.chart-container h3 {
+  margin: 0 0 1rem 0;
+  color: var(--dark-text);
+}
+
