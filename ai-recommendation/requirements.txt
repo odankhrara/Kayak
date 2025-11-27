@@ -9,4 +9,5 @@ aiokafka==0.10.0
 httpx==0.25.2
 python-dotenv==1.0.0
 python-multipart==0.0.6
+pandas>=2.1.0
 

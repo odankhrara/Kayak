@@ -228,7 +228,53 @@ Project_KayakSimulation/
 - **Helper Scripts**: `run-tests.sh` - Interactive test runner
 - **Documentation**: Complete JMeter and results analysis guides
 
-#### 4. **Infrastructure Enhancements** ✅ **COMPLETE**
+#### 4. **Host/Provider Analysis Reports** ✅ **COMPLETE**
+- **Analytics Service Endpoints** (6 new endpoints):
+  - `GET /api/admin/host/clicks-per-page` - Clicks per page analysis
+  - `GET /api/admin/host/property-clicks` - Property/listing clicks
+  - `GET /api/admin/host/least-seen-areas` - Least viewed pages/sections
+  - `GET /api/admin/host/property-reviews` - Reviews on properties
+  - `GET /api/admin/host/user-trace` - User journey tracking
+  - `GET /api/admin/host/bidding-trace` - Bidding/booking flow tracking
+- **Frontend Components**:
+  - `ClicksPerPageChart.tsx` - Bar and pie charts for page clicks
+  - `PropertyClicksChart.tsx` - Bar chart for property clicks
+  - `ReviewsChart.tsx` - Bar chart for property reviews
+  - `UserTraceDiagram.tsx` - Visual user journey timeline
+  - `BiddingTraceDiagram.tsx` - Visual bidding/booking flow
+  - `HostAnalysisPage.tsx` - Complete host analysis dashboard
+- **Features**:
+  - Click tracking per page with unique user counts
+  - Property/listing click analytics
+  - Identification of least seen areas
+  - Review aggregation and visualization
+  - User trace diagrams by user ID or location (city/state)
+  - Bidding trace diagrams with conversion rates
+  - Date range and property type filters
+
+#### 5. **Tracking Service** ✅ **COMPLETE**
+- **API Gateway Endpoints** (5 endpoints):
+  - `POST /api/tracking/click` - Track click events
+  - `POST /api/tracking/page-view` - Track page views
+  - `POST /api/tracking/search` - Track search events
+  - `POST /api/tracking/booking-attempt` - Track booking attempts
+  - `POST /api/tracking/event` - Generic event tracking
+- **Kafka Integration**:
+  - Events published to `click_event` and `user_tracking` topics
+  - Kafka producers in API Gateway
+  - Kafka consumers in Analytics Service
+- **Analytics Service Consumers**:
+  - `ClickEventsConsumer` - Processes click events
+  - `UserTrackingConsumer` - Processes page views, searches, booking attempts
+  - Events stored in MongoDB `logs` collection
+- **Frontend Integration**:
+  - `clickTracking.ts` utility for easy event tracking
+  - Functions: `trackClick()`, `trackPageView()`, `trackSearch()`, `trackBookingAttempt()`
+  - Automatic session management
+  - Device type detection
+- **Event Flow**: Frontend → API Gateway → Kafka → Analytics Service → MongoDB
+
+#### 6. **Infrastructure Enhancements** ✅ **COMPLETE**
 - **Docker Compose**:
   - Updated Kafka configuration (7.4.0)
   - Fixed listener configuration for localhost access
@@ -245,18 +291,20 @@ Project_KayakSimulation/
 - Improved API discoverability
 
 ### 📊 Implementation Statistics
-- **Total New Files Created**: 100+ files
-- **Frontend Files**: 75+ React/TypeScript files
+- **Total New Files Created**: 120+ files
+- **Frontend Files**: 85+ React/TypeScript files (including host analysis components)
 - **AI Service Files**: 30+ Python/FastAPI files
 - **Load Test Files**: 5 JMeter test plans + documentation
 - **Infrastructure Scripts**: 3 helper scripts
-- **Overall Completion**: ~85% of planned features
+- **Tracking Service**: 5 API endpoints + 2 Kafka consumers
+- **Host Analysis**: 6 analytics endpoints + 5 chart/trace components
+- **Overall Completion**: ~90% of planned features
 
 ### 🔄 Remaining Work
 - Database schema initialization scripts
-- Kafka event consumers implementation (consumers exist, need business logic)
 - Redis caching logic implementation (clients exist, need cache strategies)
 - Transaction management files (directories exist, need implementation)
+- Integrate click tracking into existing frontend components
 - Unit and integration tests
 - Documentation files (API design, architecture diagrams)
 
@@ -418,6 +466,21 @@ See [DATABASE_SCHEMA.md](./docs/DATABASE_SCHEMA.md) for detailed schema design.
 - `GET /api/admin/users` - View all users
 - `GET /api/admin/billing/search` - Search billings
 
+### Host/Provider Analysis Service
+- `GET /api/admin/host/clicks-per-page` - Clicks per page analysis
+- `GET /api/admin/host/property-clicks` - Property/listing clicks
+- `GET /api/admin/host/least-seen-areas` - Least viewed pages/sections
+- `GET /api/admin/host/property-reviews` - Reviews on properties
+- `GET /api/admin/host/user-trace` - User journey tracking (by user ID or location)
+- `GET /api/admin/host/bidding-trace` - Bidding/booking flow tracking
+
+### Tracking Service
+- `POST /api/tracking/click` - Track click events
+- `POST /api/tracking/page-view` - Track page views
+- `POST /api/tracking/search` - Track search events
+- `POST /api/tracking/booking-attempt` - Track booking attempts
+- `POST /api/tracking/event` - Generic event tracking
+
 ### AI Recommendation Service (Port 8005)
 - `GET /health` - Health check
 - `GET /bundles` - Get recommended bundles
@@ -468,6 +531,8 @@ See [API_DESIGN_DOCUMENT.md](./docs/API_DESIGN_DOCUMENT.md) for complete API doc
 - `user-events` - User registration, updates
 - `booking-requests` - Booking requests (async processing)
 - `payment-processing` - Payment transactions
+- `click_event` - Click events from frontend (tracked by Analytics Service)
+- `user_tracking` - Page views, searches, booking attempts (tracked by Analytics Service)
 - `deals.normalized` → `deals.scored` → `deals.tagged` - AI pipeline
 - `deal.events` - Real-time deal updates (WebSocket)
 
@@ -592,14 +657,28 @@ See deployment guide in `/docs/AWS_DEPLOYMENT.md` (TBD)
 - **City-wise Revenue** - Pie chart of revenue by city
 - **Top 10 Providers** - Most successful hosts/operators
 
+### Host/Provider Analysis Reports
+- **Clicks per Page** - Bar and pie charts showing clicks per page with unique user counts
+- **Property/Listing Clicks** - Bar chart of most clicked properties/listings
+- **Least Seen Areas** - Table showing pages/sections with lowest views
+- **Reviews on Properties** - Bar chart showing review counts and average ratings per property
+- **User Trace Diagrams** - Visual timeline showing user journey by:
+  - Individual user ID
+  - Location cohort (city, state)
+  - Session-based tracking
+- **Bidding/Booking Trace Diagrams** - Visual flow showing:
+  - Click → Search → Booking attempt conversion
+  - Conversion rates per property
+  - Event timeline for bidding/limited offers
+
 ### User Behavior Tracking
-- **Clicks per Page** - Heatmap of user interactions
-- **Property Clicks** - Most viewed listings
-- **Least Viewed Sections** - Areas needing improvement
-- **User Trace Diagrams** - Journey mapping for cohorts
+- **Real-time Event Tracking** - Click events, page views, searches, booking attempts
+- **Session Management** - Automatic session ID generation and tracking
+- **Device Detection** - Desktop, mobile, tablet identification
+- **Location Tracking** - City, state, country tracking (when available)
 - **Conversion Funnel** - Search → View → Book conversion rates
 
-All analytics data stored in MongoDB logs collection and visualized in admin dashboard.
+All analytics data stored in MongoDB `logs` collection and visualized in admin dashboard and host analysis page.
 
 ---
 
@@ -680,8 +759,10 @@ See [CONTRIBUTIONS.md](./CONTRIBUTIONS.md) for detailed contributions.
 
 ### Analytics (10%)
 - ✅ Admin reports (revenue, top properties, city-wise)
-- ✅ User behavior tracking (clicks, page views)
-- ✅ Trace diagrams
+- ✅ Host/Provider analysis reports (clicks per page, property clicks, least seen areas, reviews)
+- ✅ User behavior tracking (clicks, page views, searches, booking attempts)
+- ✅ Trace diagrams (user journey, bidding/booking flow)
+- ✅ Real-time event tracking via Kafka
 
 ### Client UI (5%)
 - ✅ Modern React interface
@@ -752,8 +833,10 @@ For questions or issues, please contact:
 - ✅ **Frontend**: Complete React implementation with 7 pages, 15+ components, and 6 API clients
 - ✅ **AI Recommendation Service**: Full FastAPI implementation with Kafka integration and WebSocket support
 - ✅ **Load Testing**: JMeter test suite for 100,000 concurrent users with 4 test scenarios
+- ✅ **Host/Provider Analysis Reports**: Complete implementation with 6 analytics endpoints, 5 chart/trace components, and full dashboard
+- ✅ **Tracking Service**: Event tracking system with 5 API endpoints, Kafka integration, and MongoDB storage
 - ✅ **Infrastructure**: Enhanced Docker setup with helper scripts and improved Kafka configuration
-- ✅ **API Gateway**: Added root route for API discoverability
+- ✅ **API Gateway**: Added root route and tracking routes for API discoverability
 
 **Last Updated**: November 26, 2024
 

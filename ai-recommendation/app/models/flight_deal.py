@@ -27,4 +27,5 @@ class FlightDeal(FlightDealBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_price_update: Optional[datetime] = Field(default=None, description="Last price update timestamp for history tracking")
 

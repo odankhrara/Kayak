@@ -49,11 +49,18 @@ class DealDetector:
             availability_score = 0
         score += availability_score
         
-        # Historical trend factor (if available)
-        if historical_data:
-            avg_price = historical_data.get("avg_price", price)
-            if current_price < avg_price * 0.8:
-                score += 10  # Bonus for significant price drop
+        # Historical trend factor (if available) - uses 30-day average
+        if historical_data and historical_data.get("avg_price_30d"):
+            avg_price_30d = historical_data.get("avg_price_30d")
+            if avg_price_30d and price < avg_price_30d:
+                # Calculate how much below average
+                price_drop = ((avg_price_30d - price) / avg_price_30d) * 100
+                if price_drop >= 15:
+                    score += 15  # Bonus for ≥15% below 30-day average
+                elif price_drop >= 10:
+                    score += 10  # Bonus for ≥10% below average
+                elif price_drop >= 5:
+                    score += 5   # Small bonus for ≥5% below average
         
         return min(score, 100.0)
     
@@ -63,8 +70,11 @@ class DealDetector:
         return deal_score >= threshold
     
     @staticmethod
-    def detect_flight_deal(flight_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Detect deal from flight data"""
+    def detect_flight_deal(
+        flight_data: Dict[str, Any],
+        historical_data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Detect deal from flight data with historical context"""
         original_price = flight_data.get("original_price", flight_data.get("price", 0))
         current_price = flight_data.get("price", original_price)
         
@@ -72,7 +82,8 @@ class DealDetector:
         deal_score = DealDetector.calculate_deal_score(
             discount,
             current_price,
-            flight_data.get("available_seats", 0)
+            flight_data.get("available_seats", 0),
+            historical_data
         )
         
         return {
@@ -80,12 +91,16 @@ class DealDetector:
             "discounted_price": current_price,
             "discount_percentage": discount,
             "deal_score": deal_score,
-            "is_good_deal": DealDetector.is_good_deal(deal_score)
+            "is_good_deal": DealDetector.is_good_deal(deal_score),
+            "historical_avg_30d": historical_data.get("avg_price_30d") if historical_data else None
         }
     
     @staticmethod
-    def detect_hotel_deal(hotel_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Detect deal from hotel data"""
+    def detect_hotel_deal(
+        hotel_data: Dict[str, Any],
+        historical_data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Detect deal from hotel data with historical context"""
         original_price = hotel_data.get("original_price", hotel_data.get("price_per_night", 0))
         current_price = hotel_data.get("price_per_night", original_price)
         
@@ -93,7 +108,8 @@ class DealDetector:
         deal_score = DealDetector.calculate_deal_score(
             discount,
             current_price,
-            hotel_data.get("available_rooms", 0)
+            hotel_data.get("available_rooms", 0),
+            historical_data
         )
         
         return {
@@ -101,6 +117,7 @@ class DealDetector:
             "discounted_price_per_night": current_price,
             "discount_percentage": discount,
             "deal_score": deal_score,
-            "is_good_deal": DealDetector.is_good_deal(deal_score)
+            "is_good_deal": DealDetector.is_good_deal(deal_score),
+            "historical_avg_30d": historical_data.get("avg_price_30d") if historical_data else None
         }
 

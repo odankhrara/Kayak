@@ -18,6 +18,8 @@ import BookingCheckout from './pages/BookingCheckout';
 import MyBookings from './pages/MyBookings';
 import Profile from './pages/Profile';
 import BookingConfirmation from './pages/BookingConfirmation';
+import AdminDashboardPage from './pages/AdminDashboardPage';
+import HostAnalysisPage from './pages/HostAnalysisPage';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -39,6 +41,21 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
+// Admin Route component
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, user } = useAuthStore();
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
   }
   
   return <>{children}</>;
@@ -98,6 +115,24 @@ function App() {
                 <ProtectedRoute>
                   <Profile />
                 </ProtectedRoute>
+              }
+            />
+
+            {/* Admin routes */}
+            <Route
+              path="/admin/dashboard"
+              element={
+                <AdminRoute>
+                  <AdminDashboardPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/host-analysis"
+              element={
+                <AdminRoute>
+                  <HostAnalysisPage />
+                </AdminRoute>
               }
             />
 
