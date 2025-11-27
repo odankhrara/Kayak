@@ -59,7 +59,7 @@ services:
       - "2181:2181"
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.4.0
     container_name: kayak-kafka
     depends_on:
       - zookeeper

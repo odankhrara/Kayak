@@ -3,13 +3,13 @@ from aiokafka import AIOKafkaConsumer
 import json
 import asyncio
 import os
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, List
 
 
 class KafkaConsumerClient:
     """Kafka consumer client"""
     
-    def __init__(self, topics: list[str], group_id: str = "ai-recommendation-group"):
+    def __init__(self, topics: List[str], group_id: str = "ai-recommendation-group"):
         self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
         self.topics = topics
         self.group_id = group_id

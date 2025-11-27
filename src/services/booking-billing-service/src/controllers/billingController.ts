@@ -1,9 +1,37 @@
 import { Router, Request, Response } from 'express'
 import { requireAuth, requireAdmin } from '@kayak/common/src/middleware/auth'
+import { sendKafkaMessage } from '../../common/src/kafka/kafkaClient'
+import { KAFKA_TOPICS } from '../../common/src/kafka/topics'
 import { BillingService } from '../services/billingService'
 
 const router = Router()
 const billingService = new BillingService()
+
+const emitPaymentEvent = async (billing: any) => {
+  if (!billing || !billing.status) return
+
+  let topic: string | null = null
+  if (billing.status === 'completed') {
+    topic = KAFKA_TOPICS.PAYMENT_SUCCEEDED
+  } else if (billing.status === 'failed') {
+    topic = KAFKA_TOPICS.PAYMENT_FAILED
+  }
+
+  if (!topic) return
+
+  try {
+    await sendKafkaMessage(topic, {
+      paymentId: billing.billingId,
+      bookingId: billing.bookingId,
+      userId: billing.userId,
+      amount: billing.amount,
+      status: billing.status,
+      paidAt: billing.transactionDate || billing.updatedAt || new Date().toISOString()
+    })
+  } catch (kafkaError) {
+    console.error('Kafka publish failed for billing event:', kafkaError)
+  }
+}
 
 /**
  * @route   GET /api/billing/:id
@@ -24,6 +52,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
       })
     }
 
+    await emitPaymentEvent(billing)
     res.json(billing)
   } catch (error: any) {
     console.error('Get billing error:', error.message)
@@ -52,6 +81,10 @@ router.get('/booking/:bookingId', requireAuth, async (req: Request, res: Respons
           error: 'You do not have permission to view these billing records' 
         })
       }
+    }
+
+    for (const billing of billings) {
+      await emitPaymentEvent(billing)
     }
 
     res.json({
