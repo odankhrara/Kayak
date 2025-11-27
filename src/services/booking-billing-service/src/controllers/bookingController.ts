@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { requireAuth, requireAdmin } from '@kayak/common/src/middleware/auth'
+import { sendKafkaMessage } from '../../common/src/kafka/kafkaClient'
+import { KAFKA_TOPICS } from '../../common/src/kafka/topics'
 import { BookingService } from '../services/bookingService'
 
 const router = Router()
@@ -45,6 +47,19 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
       paymentMethod,
       paymentDetails
     })
+
+    try {
+      const booking = result.booking
+      await sendKafkaMessage(KAFKA_TOPICS.BOOKING_CREATED, {
+        bookingId: booking.bookingId,
+        userId: booking.userId,
+        totalAmount: booking.totalAmount,
+        status: booking.status,
+        createdAt: booking.createdAt || new Date().toISOString()
+      })
+    } catch (kafkaError) {
+      console.error('Kafka publish failed for booking create:', kafkaError)
+    }
 
     res.status(201).json(result)
   } catch (error: any) {
@@ -162,6 +177,19 @@ router.put('/:id/status', requireAdmin, async (req: Request, res: Response) => {
     }
 
     const booking = await bookingService.updateStatus(req.params.id, status)
+
+    try {
+      await sendKafkaMessage(KAFKA_TOPICS.BOOKING_UPDATED, {
+        bookingId: booking.bookingId,
+        userId: booking.userId,
+        totalAmount: booking.totalAmount,
+        status: booking.status,
+        createdAt: booking.createdAt || booking.bookingDate,
+        updatedAt: new Date().toISOString()
+      })
+    } catch (kafkaError) {
+      console.error('Kafka publish failed for booking update:', kafkaError)
+    }
     
     res.json({
       message: 'Booking status updated successfully',
