@@ -17,18 +17,28 @@ export function FlightSearchForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    alert('🔍 Search button clicked! Check console...')
+    console.log('🔍 SEARCH STARTED with params:', formData)
     setLoading(true)
     setError(null)
 
     try {
       setSearchParams(formData)
+      console.log('📡 Calling API...')
       const flights = await listingApi.searchFlights(formData)
+      console.log('✅ API Response - Number of flights:', flights.length)
+      console.log('📦 First flight data:', flights[0])
+      alert(`✅ Got ${flights.length} flights! First flight price: ${flights[0]?.pricePerTicket}`)
       setSearchResults({ flights, hotels: [], cars: [] })
+      console.log('🔀 Navigating to results page...')
       navigate('/results?type=flight')
     } catch (error: any) {
+      console.error('❌ SEARCH ERROR:', error)
+      alert('❌ Search failed: ' + error.message)
       setError(error.response?.data?.message || 'Failed to search flights')
     } finally {
       setLoading(false)
+      console.log('✅ Search complete')
     }
   }
 

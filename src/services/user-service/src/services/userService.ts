@@ -165,12 +165,12 @@ export class UserService {
         throw new Error('Invalid email or password')
       }
 
-      // Generate JWT token
+      // Generate JWT token with actual admin status from database
       const token = jwt.sign(
         { 
           userId: user.userId, 
           email: user.email, 
-          isAdmin: false 
+          isAdmin: user.isAdmin || false 
         },
         JWT_SECRET,
         { expiresIn: '7d' }

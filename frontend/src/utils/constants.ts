@@ -52,71 +52,25 @@ export const US_STATES = [
   { value: 'WY', label: 'Wyoming' },
 ];
 
-export const PAYMENT_METHODS = [
-  { value: 'credit_card', label: 'Credit Card' },
-  { value: 'debit_card', label: 'Debit Card' },
-  { value: 'paypal', label: 'PayPal' },
-];
+// Removed duplicate exports - keeping the more complete versions below
 
-export const BOOKING_STATUSES = [
-  { value: 'pending', label: 'Pending', color: 'yellow' },
-  { value: 'confirmed', label: 'Confirmed', color: 'green' },
-  { value: 'cancelled', label: 'Cancelled', color: 'red' },
-  { value: 'completed', label: 'Completed', color: 'blue' },
-];
-
-export const SORT_OPTIONS = {
-  flight: [
-    { value: 'price', label: 'Price: Low to High' },
-    { value: 'departure_datetime', label: 'Departure Time' },
-    { value: 'duration_minutes', label: 'Duration' },
-    { value: 'flight_rating', label: 'Rating' },
-  ],
-  hotel: [
-    { value: 'price', label: 'Price: Low to High' },
-    { value: 'star_rating', label: 'Star Rating' },
-    { value: 'hotel_rating', label: 'Guest Rating' },
-    { value: 'hotel_name', label: 'Name' },
-  ],
-  car: [
-    { value: 'price', label: 'Price: Low to High' },
-    { value: 'car_type', label: 'Car Type' },
-    { value: 'car_rating', label: 'Rating' },
-  ],
-};
-
-export const STAR_RATINGS = [5, 4, 3, 2, 1];
-
-export const CAR_TYPES = [
-  { value: 'sedan', label: 'Sedan' },
-  { value: 'suv', label: 'SUV' },
-  { value: 'compact', label: 'Compact' },
-  { value: 'luxury', label: 'Luxury' },
-  { value: 'van', label: 'Van' },
-];
-
-export const TRANSMISSION_TYPES = [
-  { value: 'automatic', label: 'Automatic' },
-  { value: 'manual', label: 'Manual' },
-];
-
-// Popular airports (IATA codes)
+// Popular airports (IATA codes) - matches seed-data.js
 export const POPULAR_AIRPORTS = [
   { value: 'ATL', label: 'ATL - Atlanta' },
-  { value: 'DFW', label: 'DFW - Dallas/Fort Worth' },
+  { value: 'BOS', label: 'BOS - Boston' },
   { value: 'DEN', label: 'DEN - Denver' },
-  { value: 'ORD', label: 'ORD - Chicago O\'Hare' },
-  { value: 'LAX', label: 'LAX - Los Angeles' },
+  { value: 'DFW', label: 'DFW - Dallas/Fort Worth' },
+  { value: 'EWR', label: 'EWR - Newark' },
   { value: 'JFK', label: 'JFK - New York JFK' },
   { value: 'LAS', label: 'LAS - Las Vegas' },
+  { value: 'LAX', label: 'LAX - Los Angeles' },
   { value: 'MCO', label: 'MCO - Orlando' },
   { value: 'MIA', label: 'MIA - Miami' },
+  { value: 'MSP', label: 'MSP - Minneapolis' },
+  { value: 'ORD', label: 'ORD - Chicago O\'Hare' },
+  { value: 'PHX', label: 'PHX - Phoenix' },
   { value: 'SEA', label: 'SEA - Seattle' },
   { value: 'SFO', label: 'SFO - San Francisco' },
-  { value: 'PHX', label: 'PHX - Phoenix' },
-  { value: 'BOS', label: 'BOS - Boston' },
-  { value: 'IAH', label: 'IAH - Houston' },
-  { value: 'SAN', label: 'SAN - San Diego' },
 ];
 
 // Flight classes
@@ -208,8 +162,8 @@ export const ROOM_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
   label: `${i + 1} ${i === 0 ? 'Room' : 'Rooms'}`,
 }));
 
-// Star ratings
-export const STAR_RATINGS = [1, 2, 3, 4, 5];
+// Star ratings (descending order for filters)
+export const STAR_RATINGS = [5, 4, 3, 2, 1];
 
 // Popular cities for hotels
 export const POPULAR_CITIES = [

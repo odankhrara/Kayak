@@ -61,11 +61,11 @@ function generateZIP() {
   return String(Math.floor(Math.random() * 90000) + 10000);
 }
 
-// Generate random email
-function generateEmail(firstName, lastName) {
+// Generate random email (with unique index to prevent duplicates)
+function generateEmail(firstName, lastName, index) {
   const providers = ['gmail.com', 'yahoo.com', 'outlook.com', 'example.com'];
   const provider = providers[Math.floor(Math.random() * providers.length)];
-  return `${firstName.toLowerCase()}.${lastName.toLowerCase()}${Math.floor(Math.random() * 1000)}@${provider}`;
+  return `${firstName.toLowerCase()}.${lastName.toLowerCase()}${index}@${provider}`;
 }
 
 // Generate random phone
@@ -112,13 +112,47 @@ async function seedDatabase() {
     const hashedPassword = await bcrypt.hash('password123', 10);
 
     // ============================================
-    // 1. SEED USERS (1000 users)
+    // 1. SEED USERS (1000 users + 2 admin users)
     // ============================================
-    console.log('👥 Seeding users (1000 records)...');
+    console.log('👥 Seeding users (1000 records + 2 admin users)...');
     const userInserts = [];
     const firstNames = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Emily', 'James', 'Emma', 'Robert', 'Olivia'];
     const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
 
+    // First, add admin users
+    userInserts.push([
+      '999-99-9999',
+      'Admin',
+      'User',
+      'admin@kayak.com',
+      hashedPassword,
+      '555-000-0001',
+      '123 Admin Street',
+      'San Francisco',
+      'CA',
+      '94102',
+      null,
+      'active',
+      1 // is_admin
+    ]);
+
+    userInserts.push([
+      '888-88-8888',
+      'Test',
+      'Admin',
+      'testadmin@kayak.com',
+      hashedPassword,
+      '555-000-0002',
+      '456 Test Avenue',
+      'New York',
+      'NY',
+      '10001',
+      null,
+      'active',
+      1 // is_admin
+    ]);
+
+    // Then add regular users
     for (let i = 0; i < 1000; i++) {
       const state = states[Math.floor(Math.random() * states.length)];
       const cityList = cities[state] || ['Default City'];
@@ -130,7 +164,7 @@ async function seedDatabase() {
         generateSSN(),
         firstName,
         lastName,
-        generateEmail(firstName, lastName),
+        generateEmail(firstName, lastName, i),
         hashedPassword,
         generatePhone(),
         `${Math.floor(Math.random() * 9999) + 1} Main St`,
@@ -138,15 +172,16 @@ async function seedDatabase() {
         state,
         generateZIP(),
         null, // profile_image_id
-        'active'
+        'active',
+        0 // is_admin (regular user)
       ]);
     }
 
     await mysqlConnection.query(
-      'INSERT INTO users (user_id, first_name, last_name, email, password_hash, phone, address, city, state, zip_code, profile_image_id, status) VALUES ?',
+      'INSERT INTO users (user_id, first_name, last_name, email, password_hash, phone, address, city, state, zip_code, profile_image_id, status, is_admin) VALUES ?',
       [userInserts]
     );
-    console.log('✅ 1000 users created\n');
+    console.log('✅ 1002 users created (1000 regular + 2 admin)\n');
 
     // ============================================
     // 2. SEED FLIGHTS (500 flights)
@@ -313,6 +348,119 @@ async function seedDatabase() {
     );
     console.log('✅ 200 cars created\n');
 
+    // ============================================
+    // 5. SEED BOOKINGS (2000 bookings)
+    // ============================================
+    console.log('📅 Seeding bookings (2000 records)...');
+    
+    // Get all user IDs
+    const [users] = await mysqlConnection.query('SELECT user_id FROM users');
+    const [flights] = await mysqlConnection.query('SELECT flight_id, price_per_ticket FROM flights');
+    const [hotels] = await mysqlConnection.query('SELECT hotel_id FROM hotels');
+    const [hotelRooms] = await mysqlConnection.query('SELECT hotel_id, price_per_night FROM hotel_rooms');
+    const [cars] = await mysqlConnection.query('SELECT car_id, daily_rate FROM cars');
+    
+    const bookingInserts = [];
+    const usedConfirmationCodes = new Set();
+    
+    for (let i = 0; i < 2000; i++) {
+      const bookingType = ['flight', 'hotel', 'car'][Math.floor(Math.random() * 3)];
+      const user = users[Math.floor(Math.random() * users.length)];
+      const startDate = randomFutureDate(60);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + Math.floor(Math.random() * 7) + 1); // 1-7 days
+      
+      let bookingReference, totalAmount;
+      
+      if (bookingType === 'flight') {
+        const flight = flights[Math.floor(Math.random() * flights.length)];
+        bookingReference = flight.flight_id;
+        totalAmount = parseFloat(flight.price_per_ticket) * (Math.floor(Math.random() * 3) + 1); // 1-3 passengers
+      } else if (bookingType === 'hotel') {
+        const room = hotelRooms[Math.floor(Math.random() * hotelRooms.length)];
+        bookingReference = room.hotel_id;
+        const nights = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+        totalAmount = parseFloat(room.price_per_night) * nights;
+      } else {
+        const car = cars[Math.floor(Math.random() * cars.length)];
+        bookingReference = car.car_id;
+        const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+        totalAmount = parseFloat(car.daily_rate) * days;
+      }
+      
+      // Generate unique confirmation code
+      let confirmationCode;
+      do {
+        confirmationCode = generateConfirmationCode();
+      } while (usedConfirmationCodes.has(confirmationCode));
+      usedConfirmationCodes.add(confirmationCode);
+      
+      const bookingId = `BK${String(i).padStart(6, '0')}`; // e.g., BK000001, BK001999
+      
+      bookingInserts.push([
+        bookingId,
+        user.user_id,
+        bookingType,
+        bookingReference,
+        confirmationCode,
+        ['confirmed', 'pending'][Math.floor(Math.random() * 2)],
+        startDate,
+        endDate,
+        Math.floor(Math.random() * 4) + 1, // 1-4 guests
+        totalAmount.toFixed(2),
+        null // special_requests
+      ]);
+    }
+    
+    await mysqlConnection.query(
+      'INSERT INTO bookings (booking_id, user_id, booking_type, booking_reference, confirmation_code, status, start_date, end_date, guests, total_amount, special_requests) VALUES ?',
+      [bookingInserts]
+    );
+    console.log('✅ 2000 bookings created\n');
+
+    // ============================================
+    // 6. SEED BILLING (2000 billing records)
+    // ============================================
+    console.log('💰 Seeding billing records (2000 records)...');
+    const billingInserts = [];
+    const usedTransactionIds = new Set();
+    
+    for (let i = 0; i < 2000; i++) {
+      const booking = bookingInserts[i];
+      const amount = parseFloat(booking[9]); // total_amount from booking
+      const tax = (amount * 0.08).toFixed(2); // 8% tax
+      const totalAmount = (amount * 1.08).toFixed(2);
+      
+      // Generate unique transaction ID
+      let transactionId;
+      do {
+        transactionId = `TXN${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+      } while (usedTransactionIds.has(transactionId));
+      usedTransactionIds.add(transactionId);
+      
+      const billingId = `BILL${String(i).padStart(6, '0')}`; // e.g., BILL000001, BILL001999
+      
+      billingInserts.push([
+        billingId,
+        booking[1], // user_id
+        booking[0], // booking_id
+        booking[2], // booking_type
+        transactionId,
+        amount.toFixed(2),
+        tax,
+        totalAmount,
+        ['credit_card', 'debit_card', 'paypal'][Math.floor(Math.random() * 3)],
+        ['completed', 'pending'][Math.floor(Math.random() * 10) > 1 ? 0 : 1], // 90% completed
+        `INV-${Date.now()}-${i}`
+      ]);
+    }
+    
+    await mysqlConnection.query(
+      'INSERT INTO billing (billing_id, user_id, booking_id, booking_type, transaction_id, amount, tax, total_amount, payment_method, transaction_status, invoice_id) VALUES ?',
+      [billingInserts]
+    );
+    console.log('✅ 2000 billing records created\n');
+
     console.log('\n========================================');
     console.log('🎉 Database Seeding Complete!');
     console.log('========================================');
@@ -321,6 +469,8 @@ async function seedDatabase() {
     console.log('  - 500 flights');
     console.log('  - 200 hotels (600 rooms, 800+ amenities)');
     console.log('  - 200 cars');
+    console.log('  - 2000 bookings');
+    console.log('  - 2000 billing records');
     console.log('\nMongoDB:');
     console.log('  - Sample reviews, images, logs (from init.js)');
     console.log('  - Sample deals, bundles, watches (from init.js)');

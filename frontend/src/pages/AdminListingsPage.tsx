@@ -97,11 +97,11 @@ export default function AdminListingsPage() {
             </thead>
             <tbody>
               {listings.flights.map((flight) => (
-                <tr key={flight.id}>
-                  <td>{flight.airline}</td>
+                <tr key={flight.id || flight.flightId}>
+                  <td>{flight.airlineName || flight.airline}</td>
                   <td>{flight.flightNumber}</td>
-                  <td>{flight.origin} → {flight.destination}</td>
-                  <td>${flight.price.toFixed(2)}</td>
+                  <td>{(flight.departureAirport || flight.origin)} → {(flight.arrivalAirport || flight.destination)}</td>
+                  <td>${(flight.pricePerTicket || flight.price || 0).toFixed(2)}</td>
                   <td>
                     <button
                       onClick={() => handleDelete(flight.id!, 'flight')}

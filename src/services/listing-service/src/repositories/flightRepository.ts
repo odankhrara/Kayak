@@ -99,18 +99,20 @@ export class FlightRepository {
       query += ` ORDER BY ${sortBy} ${sortOrder}`
     }
 
-    // Limit results
+    // Limit results (use direct value, not placeholder, to avoid MySQL prepared statement issues)
     if (filters.limit && filters.limit > 0) {
-      query += ' LIMIT ?'
-      params.push(filters.limit)
+      query += ` LIMIT ${parseInt(String(filters.limit))}`
     }
 
-    const [rows] = await mysqlPool.execute(query, params)
+    console.log('[DEBUG] Flight search query:', query)
+    console.log('[DEBUG] Flight search params:', params)
+    const [rows] = await mysqlPool.query(query, params)
+    console.log('[DEBUG] Flight search results:', (rows as any[]).length)
     return (rows as any[]).map(row => this.mapRowToFlight(row))
   }
 
   async getById(flightId: string): Promise<Flight | null> {
-    const [rows] = await mysqlPool.execute(
+    const [rows] = await mysqlPool.query(
       'SELECT * FROM flights WHERE flight_id = ?',
       [flightId]
     )
@@ -136,7 +138,7 @@ export class FlightRepository {
   }): Promise<Flight> {
     const available_seats = flightData.total_seats
 
-    await mysqlPool.execute(
+    await mysqlPool.query(
       `INSERT INTO flights (
         flight_id, airline_name, departure_airport, arrival_airport,
         departure_datetime, arrival_datetime, duration_minutes, flight_class,
@@ -194,7 +196,7 @@ export class FlightRepository {
     }
 
     values.push(flightId)
-    await mysqlPool.execute(
+    await mysqlPool.query(
       `UPDATE flights SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE flight_id = ?`,
       values
     )
@@ -246,9 +248,8 @@ export class FlightRepository {
    * Get all flights for admin (no filters)
    */
   async getAll(limit: number = 100): Promise<Flight[]> {
-    const [rows] = await mysqlPool.execute(
-      'SELECT * FROM flights ORDER BY departure_datetime DESC LIMIT ?',
-      [limit]
+    const [rows] = await mysqlPool.query(
+      `SELECT * FROM flights ORDER BY departure_datetime DESC LIMIT ${parseInt(String(limit))}`
     )
     return (rows as any[]).map(row => this.mapRowToFlight(row))
   }
@@ -257,7 +258,7 @@ export class FlightRepository {
    * Delete flight (Admin only)
    */
   async delete(flightId: string): Promise<void> {
-    await mysqlPool.execute('DELETE FROM flights WHERE flight_id = ?', [flightId])
+    await mysqlPool.query('DELETE FROM flights WHERE flight_id = ?', [flightId])
   }
 
   private mapRowToFlight(row: any): Flight {

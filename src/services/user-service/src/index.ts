@@ -7,7 +7,7 @@ import userController from './controllers/userController'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 8001
+const PORT = parseInt(process.env.PORT || '8001', 10)
 
 app.use(cors())
 app.use(express.json())
@@ -20,7 +20,7 @@ app.use('/api/users', userController)
 
 app.use(errorHandler)
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`User Service running on port ${PORT}`)
 })
 

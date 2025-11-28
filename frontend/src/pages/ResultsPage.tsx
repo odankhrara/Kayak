@@ -13,6 +13,10 @@ export default function ResultsPage() {
   const type = searchParams.get('type') || 'flight'
   const { searchResults, loading } = useStore()
 
+  console.log('📄 ResultsPage rendered')
+  console.log('🔍 Search type:', type)
+  console.log('📦 Search results from store:', searchResults)
+
   const getResults = () => {
     switch (type) {
       case 'flight':
@@ -27,6 +31,10 @@ export default function ResultsPage() {
   }
 
   const results = getResults()
+  console.log('✈️  Final results to display:', results.length, 'items')
+  if (results.length > 0) {
+    console.log('First result:', results[0])
+  }
 
   return (
     <div className="results-page">
@@ -55,14 +63,14 @@ export default function ResultsPage() {
           )}
           {!loading && results.length > 0 && (
             <>
-              {type === 'flight' && results.map((flight: any) => (
-                <FlightResultCard key={flight.id} flight={flight} />
+              {type === 'flight' && results.map((flight: any, index: number) => (
+                <FlightResultCard key={flight.flightId || flight.id || index} flight={flight} />
               ))}
-              {type === 'hotel' && results.map((hotel: any) => (
-                <HotelResultCard key={hotel.id} hotel={hotel} />
+              {type === 'hotel' && results.map((hotel: any, index: number) => (
+                <HotelResultCard key={hotel.hotelId || hotel.id || index} hotel={hotel} />
               ))}
-              {type === 'car' && results.map((car: any) => (
-                <CarResultCard key={car.id} car={car} />
+              {type === 'car' && results.map((car: any, index: number) => (
+                <CarResultCard key={car.carId || car.id || index} car={car} />
               ))}
             </>
           )}

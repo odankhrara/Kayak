@@ -4,15 +4,30 @@ const API_BASE_URL = '/api/listings'
 
 export interface Flight {
   id?: number
-  airline: string
-  flightNumber: string
-  origin: string
-  destination: string
-  departureTime: string
-  arrivalTime: string
-  price: number
-  availableSeats: number
+  flightId?: string
+  airline?: string
+  airlineName?: string
+  flightNumber?: string
+  origin?: string
+  destination?: string
+  departureAirport?: string
+  arrivalAirport?: string
+  departureTime?: string
+  departureDatetime?: string
+  arrivalTime?: string
+  arrivalDatetime?: string
+  price?: number
+  pricePerTicket?: number
+  availableSeats?: number
   aircraftType?: string
+  durationMinutes?: number
+  flightClass?: string
+  rating?: number
+  reviewsCount?: number
+  status?: string
+  totalSeats?: number
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface Hotel {
@@ -61,7 +76,8 @@ export const listingApi = {
   // Flights
   searchFlights: async (params: SearchParams): Promise<Flight[]> => {
     const response = await axios.get(`${API_BASE_URL}/flights/search`, { params })
-    return response.data
+    // Backend returns { count, filters, flights }, extract flights array
+    return response.data.flights || response.data
   },
 
   getFlight: async (id: number): Promise<Flight> => {
@@ -86,7 +102,8 @@ export const listingApi = {
   // Hotels
   searchHotels: async (params: SearchParams): Promise<Hotel[]> => {
     const response = await axios.get(`${API_BASE_URL}/hotels/search`, { params })
-    return response.data
+    // Backend returns { count, filters, hotels }, extract hotels array
+    return response.data.hotels || response.data
   },
 
   getHotel: async (id: number): Promise<Hotel> => {
@@ -111,7 +128,8 @@ export const listingApi = {
   // Cars
   searchCars: async (params: SearchParams): Promise<Car[]> => {
     const response = await axios.get(`${API_BASE_URL}/cars/search`, { params })
-    return response.data
+    // Backend returns { count, filters, cars }, extract cars array
+    return response.data.cars || response.data
   },
 
   getCar: async (id: number): Promise<Car> => {

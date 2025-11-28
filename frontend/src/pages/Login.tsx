@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Plane } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -14,6 +14,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const {
     register,
@@ -26,7 +27,15 @@ const Login = () => {
     try {
       await login(data);
       toast.success('Welcome back!');
-      navigate('/');
+      
+      // Check if user was trying to book something before login
+      const state = location.state as any;
+      if (state?.from === '/booking/checkout' && state?.bookingData) {
+        // Restore booking flow
+        navigate('/booking/checkout', { state: state.bookingData });
+      } else {
+        navigate('/');
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Login failed');
     } finally {
@@ -58,6 +67,15 @@ const Login = () => {
             <p className="text-slate-600 dark:text-slate-400">
               Login to continue your journey
             </p>
+            
+            {/* Show message if user was trying to book */}
+            {location.state?.bookingData && (
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  🔒 Please login to complete your booking
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Login Form */}

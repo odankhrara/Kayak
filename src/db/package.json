@@ -4,7 +4,8 @@
   "description": "Database seeder for Kayak Travel Booking System",
   "main": "seed-data.js",
   "scripts": {
-    "seed": "node seed-data.js"
+    "seed": "node seed-data.js",
+    "create-admin": "node create-admin.js"
   },
   "dependencies": {
     "mysql2": "^3.6.5",

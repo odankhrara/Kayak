@@ -18,7 +18,7 @@ import { PAYMENT_METHODS } from '../utils/constants';
 const BookingCheckout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
 
   const { bookingType, entity, quantity, checkInDate, checkOutDate } = location.state || {};
@@ -29,6 +29,18 @@ const BookingCheckout = () => {
     watch,
     formState: { errors },
   } = useForm<any>();
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated || !user) {
+    toast.error('Please login to complete your booking');
+    navigate('/login', { 
+      state: { 
+        from: '/booking/checkout',
+        bookingData: { bookingType, entity, quantity, checkInDate, checkOutDate }
+      } 
+    });
+    return null;
+  }
 
   if (!entity) {
     navigate('/');
@@ -41,7 +53,7 @@ const BookingCheckout = () => {
   const calculateTotal = () => {
     let basePrice = 0;
     if (bookingType === 'flight') {
-      basePrice = entity.ticketPrice * quantity;
+      basePrice = (entity.pricePerTicket || entity.ticketPrice || 0) * quantity;
     } else if (bookingType === 'hotel') {
       const nights = calculateNights(checkInDate, checkOutDate);
       basePrice = (entity.rooms?.[0]?.pricePerNight || 0) * nights * quantity;
@@ -58,9 +70,17 @@ const BookingCheckout = () => {
   const onSubmit = async (data: any) => {
     setIsLoading(true);
     try {
+      // For hotels, entityId needs to be "hotelId:roomType"
+      let entityId = entity.flightId || entity.carId || entity.hotelId;
+      if (bookingType === 'hotel' && entity.hotelId && entity.rooms && entity.rooms.length > 0) {
+        // Use the first available room type
+        const roomType = entity.rooms[0].roomType || 'single';
+        entityId = `${entity.hotelId}:${roomType}`;
+      }
+      
       const bookingData: CreateBookingData = {
         bookingType,
-        entityId: entity.flightId || entity.hotelId || entity.carId,
+        entityId: entityId,
         quantity,
         checkInDate,
         checkOutDate,

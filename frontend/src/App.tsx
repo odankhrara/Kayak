@@ -18,6 +18,7 @@ import BookingCheckout from './pages/BookingCheckout';
 import MyBookings from './pages/MyBookings';
 import Profile from './pages/Profile';
 import BookingConfirmation from './pages/BookingConfirmation';
+import AdminBillingPage from './pages/AdminBillingPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import HostAnalysisPage from './pages/HostAnalysisPage';
 
@@ -114,6 +115,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* Admin routes */}
+            <Route
+              path="/admin/billings"
+              element={
+                <ProtectedRoute>
+                  <AdminBillingPage />
                 </ProtectedRoute>
               }
             />

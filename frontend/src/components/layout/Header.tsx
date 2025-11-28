@@ -57,6 +57,14 @@ const Header = () => {
                 My Bookings
               </Link>
             )}
+            {isAuthenticated && user?.role === 'admin' && (
+              <Link
+                to="/admin/billings"
+                className="text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
+              >
+                Admin Billings
+              </Link>
+            )}
           </nav>
 
           {/* Auth Buttons */}
@@ -156,6 +164,15 @@ const Header = () => {
                 className="block px-4 py-3 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
               >
                 My Bookings
+              </Link>
+            )}
+            {isAuthenticated && user?.role === 'admin' && (
+              <Link
+                to="/admin/billings"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-3 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
+              >
+                Admin Billings
               </Link>
             )}
             <div className="border-t border-white/20 dark:border-slate-700/20 pt-2 mt-2">

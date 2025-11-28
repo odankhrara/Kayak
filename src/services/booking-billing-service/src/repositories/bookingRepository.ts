@@ -41,7 +41,7 @@ export class BookingRepository {
       ]
     )
 
-    return this.getById(bookingData.booking_id)
+    return this.getById(bookingData.booking_id, connection)
   }
 
   /**
@@ -78,8 +78,10 @@ export class BookingRepository {
   /**
    * Get booking by ID
    */
-  async getById(bookingId: string): Promise<any | null> {
-    const [rows] = await mysqlPool.execute(
+  async getById(bookingId: string, connection?: PoolConnection): Promise<any | null> {
+    const conn = connection || mysqlPool
+    
+    const [rows] = await conn.execute(
       `SELECT b.*,
               CASE 
                 WHEN b.booking_type = 'flight' THEN f.airline_name
@@ -105,7 +107,7 @@ export class BookingRepository {
 
     // If flight booking, get passenger details
     if (booking.booking_type === 'flight') {
-      const [passengers] = await mysqlPool.execute(
+      const [passengers] = await conn.execute(
         'SELECT * FROM flight_booking_details WHERE booking_id = ?',
         [bookingId]
       )

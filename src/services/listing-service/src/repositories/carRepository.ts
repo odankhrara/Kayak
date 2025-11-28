@@ -82,7 +82,9 @@ export class CarRepository {
       params.push(filters.limit)
     }
 
-    const [rows] = await mysqlPool.execute(query, params)
+    console.log('[DEBUG] Car search query:', query)
+    console.log('[DEBUG] Car search params:', params)
+    const [rows] = await mysqlPool.query(query, params)
     return (rows as any[]).map(row => this.mapRowToCar(row))
   }
 
@@ -90,7 +92,7 @@ export class CarRepository {
    * Get car by ID
    */
   async getById(carId: string): Promise<any | null> {
-    const [rows] = await mysqlPool.execute(
+    const [rows] = await mysqlPool.query(
       'SELECT * FROM cars WHERE car_id = ?',
       [carId]
     )
@@ -113,7 +115,7 @@ export class CarRepository {
     daily_rate: number;
     location: string;
   }): Promise<any> {
-    await mysqlPool.execute(
+    await mysqlPool.query(
       `INSERT INTO cars (
         car_id, car_type, company_name, model, year, transmission,
         seats, daily_rate, location, available
@@ -166,7 +168,7 @@ export class CarRepository {
     }
 
     values.push(carId)
-    await mysqlPool.execute(
+    await mysqlPool.query(
       `UPDATE cars SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE car_id = ?`,
       values
     )
@@ -218,7 +220,7 @@ export class CarRepository {
    * Get all cars for admin
    */
   async getAll(limit: number = 100): Promise<any[]> {
-    const [rows] = await mysqlPool.execute(
+    const [rows] = await mysqlPool.query(
       'SELECT * FROM cars ORDER BY created_at DESC LIMIT ?',
       [limit]
     )
@@ -229,7 +231,7 @@ export class CarRepository {
    * Delete car (Admin only)
    */
   async delete(carId: string): Promise<void> {
-    await mysqlPool.execute('DELETE FROM cars WHERE car_id = ?', [carId])
+    await mysqlPool.query('DELETE FROM cars WHERE car_id = ?', [carId])
   }
 
   private mapRowToCar(row: any): any {

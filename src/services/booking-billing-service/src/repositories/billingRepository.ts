@@ -42,14 +42,16 @@ export class BillingRepository {
       ]
     )
 
-    return this.getById(billingData.billing_id)
+    return this.getById(billingData.billing_id, connection)
   }
 
   /**
    * Get billing by ID
    */
-  async getById(billingId: string): Promise<any | null> {
-    const [rows] = await mysqlPool.execute(
+  async getById(billingId: string, connection?: PoolConnection): Promise<any | null> {
+    const conn = connection || mysqlPool
+    
+    const [rows] = await conn.execute(
       `SELECT b.*, u.email as user_email, u.first_name, u.last_name
        FROM billing b
        LEFT JOIN users u ON b.user_id = u.user_id

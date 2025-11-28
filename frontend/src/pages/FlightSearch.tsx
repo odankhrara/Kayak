@@ -12,10 +12,13 @@ import Select from '../components/common/Select';
 import Input from '../components/common/Input';
 import { formatCurrency, formatTime, formatDuration } from '../utils/formatters';
 import { SORT_OPTIONS } from '../utils/constants';
+import { toast } from 'react-toastify';
+import { useAuthStore } from '../store/authStore';
 
 const FlightSearch = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
   const [showFilters, setShowFilters] = useState(true);
   
   // Filters
@@ -44,6 +47,23 @@ const FlightSearch = () => {
   });
 
   const handleBookFlight = (flight: Flight) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to book this flight');
+      navigate('/login', {
+        state: {
+          from: '/booking/checkout',
+          bookingData: {
+            bookingType: 'flight',
+            entity: flight,
+            quantity: filters.passengers,
+            checkInDate: filters.departureDate,
+            checkOutDate: filters.departureDate,
+          }
+        }
+      });
+      return;
+    }
+    
     navigate('/booking/checkout', {
       state: {
         bookingType: 'flight',
@@ -57,13 +77,102 @@ const FlightSearch = () => {
 
   if (!filters.origin || !filters.destination) {
     return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <Plane className="w-16 h-16 mx-auto mb-4 text-slate-400" />
-        <h2 className="text-2xl font-display font-bold mb-2">No search criteria</h2>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">
-          Please start a new search from the home page
-        </p>
-        <Button onClick={() => navigate('/')}>Go to Home</Button>
+      <div className="container mx-auto px-4 py-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <Plane className="w-16 h-16 mx-auto mb-4 text-blue-600" />
+            <h1 className="text-4xl font-display font-bold mb-2">Search Flights</h1>
+            <p className="text-xl text-slate-600 dark:text-slate-400">
+              Find the best deals on flights worldwide
+            </p>
+          </div>
+
+          <Card className="p-8">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const params = new URLSearchParams({
+                origin: formData.get('origin') as string,
+                destination: formData.get('destination') as string,
+                departureDate: formData.get('departureDate') as string,
+                passengers: formData.get('passengers') as string || '1',
+                class: formData.get('class') as string || 'economy',
+              });
+              navigate(`/flights?${params.toString()}`);
+            }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <Input
+                  type="text"
+                  name="origin"
+                  label="From (Airport Code)"
+                  placeholder="e.g., MCO, ATL, JFK"
+                  maxLength={3}
+                  required
+                />
+                <Input
+                  type="text"
+                  name="destination"
+                  label="To (Airport Code)"
+                  placeholder="e.g., MSP, LAX, MIA"
+                  maxLength={3}
+                  required
+                />
+                <Input
+                  type="date"
+                  name="departureDate"
+                  label="Departure Date"
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                />
+                <Input
+                  type="number"
+                  name="passengers"
+                  label="Passengers"
+                  min="1"
+                  max="9"
+                  defaultValue="1"
+                  required
+                />
+                <Select
+                  name="class"
+                  label="Class"
+                  defaultValue="economy"
+                  options={[
+                    { value: 'economy', label: 'Economy' },
+                    { value: 'business', label: 'Business' },
+                    { value: 'first', label: 'First Class' },
+                  ]}
+                />
+              </div>
+              <Button type="submit" fullWidth size="lg">
+                Search Flights
+              </Button>
+            </form>
+          </Card>
+
+          <div className="mt-8 text-center">
+            <p className="text-sm text-slate-500 mb-2">Popular routes:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {[
+                { from: 'MCO', to: 'MSP', label: 'Orlando → Minneapolis' },
+                { from: 'ATL', to: 'LAX', label: 'Atlanta → Los Angeles' },
+                { from: 'JFK', to: 'SFO', label: 'New York → San Francisco' },
+              ].map((route) => (
+                <button
+                  key={route.label}
+                  onClick={() => {
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    navigate(`/flights?origin=${route.from}&destination=${route.to}&departureDate=${tomorrow.toISOString().split('T')[0]}&passengers=1&class=economy`);
+                  }}
+                  className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm transition-colors"
+                >
+                  {route.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -236,7 +345,7 @@ const FlightSearch = () => {
                   <div className="flex md:flex-col items-center md:items-end gap-4">
                     <div className="text-right">
                       <p className="text-3xl font-bold text-blue-600">
-                        {formatCurrency(flight.ticketPrice)}
+                        {formatCurrency(flight.pricePerTicket || flight.ticketPrice || 0)}
                       </p>
                       <p className="text-sm text-slate-500">per person</p>
                     </div>
