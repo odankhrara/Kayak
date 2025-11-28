@@ -8,6 +8,7 @@ import bookingRoutes from './routes/bookingRoutes'
 import billingRoutes from './routes/billingRoutes'
 import adminRoutes from './routes/adminRoutes'
 import aiRoutes from './routes/aiRoutes'
+import trackingRoutes from './routes/trackingRoutes'
 import { config } from './config/env'
 
 dotenv.config()
@@ -29,6 +30,7 @@ app.use(bookingRoutes)
 app.use(billingRoutes)
 app.use(adminRoutes)
 app.use(aiRoutes)
+app.use('/api/tracking', trackingRoutes)
 
 app.use(errorHandler)
 

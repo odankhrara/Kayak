@@ -5,6 +5,7 @@ from app.db.session import get_session
 from app.models import FlightDeal, HotelDeal
 from app.deals_agent.deal_detector import DealDetector
 from app.deals_agent.offer_tagger import OfferTagger
+from app.data.price_history import PriceHistoryTracker
 from app.kafka.consumer import KafkaConsumerClient
 from typing import Dict, Any
 import os
@@ -38,21 +39,27 @@ class IngestionWorker:
     
     async def _process_flight_feed(self, flight_data: Dict[str, Any]):
         """Process flight feed and create/update deal"""
-        # Detect deal
-        deal_info = DealDetector.detect_flight_deal(flight_data)
-        
-        # Only process if it's a good deal
-        if not deal_info.get("is_good_deal"):
-            return
-        
-        # Tag the offer
-        tags = OfferTagger.tag_flight(flight_data)
-        
         # Get database session
         session_gen = get_session()
         session = next(session_gen)
         
         try:
+            # Get historical price data (30-day average)
+            listing_id = flight_data.get("flight_number", "")
+            historical_data = PriceHistoryTracker.get_historical_data(
+                session, "flight", listing_id
+            )
+            
+            # Detect deal with historical context
+            deal_info = DealDetector.detect_flight_deal(flight_data, historical_data)
+            
+            # Only process if it's a good deal
+            if not deal_info.get("is_good_deal"):
+                return
+            
+            # Tag the offer
+            tags = OfferTagger.tag_flight(flight_data)
+            
             # Check if deal already exists
             statement = select(FlightDeal).where(
                 FlightDeal.airline == flight_data.get("airline"),
@@ -85,6 +92,12 @@ class IngestionWorker:
                 )
                 session.add(deal)
             
+            # Store price point in history
+            if deal_info.get("discounted_price"):
+                PriceHistoryTracker.store_price_point(
+                    session, "flight", listing_id, deal_info["discounted_price"]
+                )
+            
             session.commit()
             print(f"Processed flight deal: {flight_data.get('airline')} {flight_data.get('flight_number')}")
         
@@ -96,21 +109,27 @@ class IngestionWorker:
     
     async def _process_hotel_feed(self, hotel_data: Dict[str, Any]):
         """Process hotel feed and create/update deal"""
-        # Detect deal
-        deal_info = DealDetector.detect_hotel_deal(hotel_data)
-        
-        # Only process if it's a good deal
-        if not deal_info.get("is_good_deal"):
-            return
-        
-        # Tag the offer
-        tags = OfferTagger.tag_hotel(hotel_data)
-        
         # Get database session
         session_gen = get_session()
         session = next(session_gen)
         
         try:
+            # Get historical price data (30-day average)
+            listing_id = hotel_data.get("name", "")
+            historical_data = PriceHistoryTracker.get_historical_data(
+                session, "hotel", listing_id
+            )
+            
+            # Detect deal with historical context
+            deal_info = DealDetector.detect_hotel_deal(hotel_data, historical_data)
+            
+            # Only process if it's a good deal
+            if not deal_info.get("is_good_deal"):
+                return
+            
+            # Tag the offer
+            tags = OfferTagger.tag_hotel(hotel_data)
+            
             # Check if deal already exists
             statement = select(HotelDeal).where(
                 HotelDeal.name == hotel_data.get("name"),
@@ -142,6 +161,12 @@ class IngestionWorker:
                     rating=hotel_data.get("rating")
                 )
                 session.add(deal)
+            
+            # Store price point in history
+            if deal_info.get("discounted_price_per_night"):
+                PriceHistoryTracker.store_price_point(
+                    session, "hotel", listing_id, deal_info["discounted_price_per_night"]
+                )
             
             session.commit()
             print(f"Processed hotel deal: {hotel_data.get('name')}")
