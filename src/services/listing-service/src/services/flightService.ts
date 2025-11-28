@@ -1,5 +1,6 @@
 import { FlightRepository } from '../repositories/flightRepository'
 import { Flight } from '../models/Flight'
+import { redisCache } from '../../../common/src/cache/redisCache'
 
 export class FlightService {
   private repository = new FlightRepository()
@@ -100,12 +101,24 @@ export class FlightService {
         throw new Error('Rating must be between 0 and 5')
       }
 
-      // Search flights
+      // Generate cache key from filters
+      const cacheKey = `flights:search:${JSON.stringify(filters)}`
+      
+      // Try cache first
+      const cachedFlights = await redisCache.get<any[]>(cacheKey)
+      if (cachedFlights) {
+        return cachedFlights
+      }
+
+      // Cache miss - query database
       const flights = await this.repository.search(filters)
 
       if (flights.length === 0) {
         return []
       }
+
+      // Store in cache (5 minutes TTL)
+      await redisCache.set(cacheKey, flights, 300)
 
       return flights
     } catch (error: any) {
@@ -114,17 +127,29 @@ export class FlightService {
   }
 
   /**
-   * Get flight by ID
+   * Get flight by ID (with caching)
    */
   async getById(flightId: string): Promise<any> {
     if (!flightId || flightId.trim().length === 0) {
       throw new Error('Flight ID is required')
     }
 
-    const flight = await this.repository.getById(flightId.toUpperCase())
+    // Try cache first
+    const normalizedId = flightId.toUpperCase()
+    const cacheKey = `flight:${normalizedId}`
+    const cachedFlight = await redisCache.get<any>(cacheKey)
+    if (cachedFlight) {
+      return cachedFlight
+    }
+
+    // Cache miss - query database
+    const flight = await this.repository.getById(normalizedId)
     if (!flight) {
       throw new Error(`Flight ${flightId} not found`)
     }
+
+    // Store in cache (10 minutes TTL)
+    await redisCache.set(cacheKey, flight, 600)
 
     return flight
   }
@@ -193,7 +218,7 @@ export class FlightService {
   }
 
   /**
-   * Update flight (Admin only)
+   * Update flight (Admin only) - with cache invalidation
    */
   async updateFlight(flightId: string, updates: any): Promise<any> {
     // Check if flight exists
@@ -216,11 +241,19 @@ export class FlightService {
       throw new Error('Total seats must be at least 1')
     }
 
-    return await this.repository.update(flightId, updates)
+    // Update in database
+    const updatedFlight = await this.repository.update(flightId, updates)
+
+    // Invalidate caches
+    await redisCache.del(`flight:${flightId}`)
+    await redisCache.delPattern('flights:search:*')
+    console.log(`🔄 Cache invalidated for flight ${flightId}`)
+
+    return updatedFlight
   }
 
   /**
-   * Delete flight (Admin only)
+   * Delete flight (Admin only) - with cache invalidation
    */
   async deleteFlight(flightId: string): Promise<void> {
     const flight = await this.repository.getById(flightId)
@@ -228,7 +261,13 @@ export class FlightService {
       throw new Error(`Flight ${flightId} not found`)
     }
 
+    // Delete from database
     await this.repository.delete(flightId)
+
+    // Invalidate caches
+    await redisCache.del(`flight:${flightId}`)
+    await redisCache.delPattern('flights:search:*')
+    console.log(`🗑️  Cache invalidated for deleted flight ${flightId}`)
   }
 
   /**

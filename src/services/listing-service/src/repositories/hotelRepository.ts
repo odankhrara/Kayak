@@ -108,11 +108,10 @@ export class HotelRepository {
 
     // Limit
     if (filters.limit && filters.limit > 0) {
-      query += ' LIMIT ?'
-      params.push(filters.limit)
+      query += ` LIMIT ${parseInt(String(filters.limit))}`
     }
 
-    const [rows] = await mysqlPool.execute(query, params)
+    const [rows] = await mysqlPool.query(query, params)
     
     // Fetch rooms and amenities for each hotel
     const hotels = []
@@ -142,7 +141,7 @@ export class HotelRepository {
    */
   private async getHotelWithDetails(hotelId: string): Promise<any | null> {
     // Get hotel basic info
-    const [hotelRows] = await mysqlPool.execute(
+    const [hotelRows] = await mysqlPool.query(
       'SELECT * FROM hotels WHERE hotel_id = ?',
       [hotelId]
     )
@@ -151,13 +150,13 @@ export class HotelRepository {
     const hotel = (hotelRows as any[])[0]
 
     // Get rooms
-    const [roomRows] = await mysqlPool.execute(
+    const [roomRows] = await mysqlPool.query(
       'SELECT * FROM hotel_rooms WHERE hotel_id = ? ORDER BY price_per_night ASC',
       [hotelId]
     )
 
     // Get amenities
-    const [amenityRows] = await mysqlPool.execute(
+    const [amenityRows] = await mysqlPool.query(
       'SELECT amenity_name, is_free FROM hotel_amenities WHERE hotel_id = ?',
       [hotelId]
     )
@@ -211,7 +210,7 @@ export class HotelRepository {
     latitude?: number;
     longitude?: number;
   }): Promise<any> {
-    await mysqlPool.execute(
+    await mysqlPool.query(
       `INSERT INTO hotels (
         hotel_id, hotel_name, address, city, state, zip_code,
         star_rating, description, total_rooms, latitude, longitude, status
@@ -266,7 +265,7 @@ export class HotelRepository {
     }
 
     values.push(hotelId)
-    await mysqlPool.execute(
+    await mysqlPool.query(
       `UPDATE hotels SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE hotel_id = ?`,
       values
     )
@@ -285,7 +284,7 @@ export class HotelRepository {
     total_rooms: number;
     description?: string;
   }): Promise<void> {
-    await mysqlPool.execute(
+    await mysqlPool.query(
       `INSERT INTO hotel_rooms (hotel_id, room_type, price_per_night, max_guests, total_rooms, available_rooms, description)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -304,7 +303,7 @@ export class HotelRepository {
    * Add amenity to hotel (Admin only)
    */
   async addAmenity(hotelId: string, amenityName: string, isFree: boolean = true): Promise<void> {
-    await mysqlPool.execute(
+    await mysqlPool.query(
       'INSERT INTO hotel_amenities (hotel_id, amenity_name, is_free) VALUES (?, ?, ?)',
       [hotelId, amenityName, isFree]
     )
@@ -354,7 +353,7 @@ export class HotelRepository {
    * Get all hotels for admin
    */
   async getAll(limit: number = 100): Promise<any[]> {
-    const [rows] = await mysqlPool.execute(
+    const [rows] = await mysqlPool.query(
       'SELECT * FROM hotels ORDER BY created_at DESC LIMIT ?',
       [limit]
     )
@@ -373,7 +372,7 @@ export class HotelRepository {
    */
   async delete(hotelId: string): Promise<void> {
     // CASCADE will delete rooms and amenities
-    await mysqlPool.execute('DELETE FROM hotels WHERE hotel_id = ?', [hotelId])
+    await mysqlPool.query('DELETE FROM hotels WHERE hotel_id = ?', [hotelId])
   }
 }
 

@@ -188,6 +188,7 @@ export class UserRepository {
       zipCode: row.zip_code,
       profileImageId: row.profile_image_id,
       status: row.status,
+      isAdmin: row.is_admin === 1 || row.is_admin === true,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     }

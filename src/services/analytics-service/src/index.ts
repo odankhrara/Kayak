@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import { errorHandler } from '@kayak/common/src/middleware/errorHandler'
 import { requireAdmin } from '@kayak/common/src/middleware/auth'
 import { AnalyticsService } from './services/analyticsService'
+import analyticsController from './controllers/analyticsController'
 
 dotenv.config()
 
@@ -17,6 +18,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'analytics-service' })
 })
 
+// Real-time analytics from Redis (updated by Kafka consumer)
+app.use('/api/analytics', analyticsController)
+
+// Legacy analytics from database
 const analyticsService = new AnalyticsService()
 
 app.get('/api/admin/revenue/by-city', requireAdmin, async (req, res) => {
@@ -44,7 +49,13 @@ app.get('/api/admin/properties/top', requireAdmin, async (req, res) => {
 
 app.use(errorHandler)
 
-app.listen(PORT, () => {
-  console.log(`Analytics Service running on port ${PORT}`)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`📊 Analytics Service running on port ${PORT}`)
+  console.log(`✅ Real-time analytics API: http://localhost:${PORT}/api/analytics/today`)
 })
+
+// Start Kafka consumer in background
+import('./kafka/bookingPaymentConsumer')
+  .then(() => console.log('✅ Kafka consumer started'))
+  .catch((err) => console.error('❌ Failed to start Kafka consumer:', err))
 

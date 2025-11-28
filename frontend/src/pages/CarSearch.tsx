@@ -7,17 +7,23 @@ import { carService } from '../services/car.service';
 import { Car } from '../types';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
+import Input from '../components/common/Input';
 import { SkeletonCard } from '../components/common/Loading';
 import Select from '../components/common/Select';
 import { formatCurrency, calculateNights } from '../utils/formatters';
 import { CAR_TYPES, TRANSMISSION_TYPES } from '../utils/constants';
+import { toast } from 'react-toastify';
+import { useAuthStore } from '../store/authStore';
 
 const CarSearch = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
   
   const [carTypeFilter, setCarTypeFilter] = useState('');
   const [transmission, setTransmission] = useState('');
+  const [pickupDate, setPickupDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
 
   const filters = {
     location: searchParams.get('location') || '',
@@ -40,6 +46,23 @@ const CarSearch = () => {
     : 0;
 
   const handleBookCar = (car: Car) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to book this car');
+      navigate('/login', {
+        state: {
+          from: '/booking/checkout',
+          bookingData: {
+            bookingType: 'car',
+            entity: car,
+            quantity: 1,
+            checkInDate: filters.pickupDate,
+            checkOutDate: filters.returnDate,
+          }
+        }
+      });
+      return;
+    }
+    
     navigate('/booking/checkout', {
       state: {
         bookingType: 'car',
@@ -53,10 +76,103 @@ const CarSearch = () => {
 
   if (!filters.location) {
     return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <CarIcon className="w-16 h-16 mx-auto mb-4 text-slate-400" />
-        <h2 className="text-2xl font-display font-bold mb-2">No search criteria</h2>
-        <Button onClick={() => navigate('/')}>Go to Home</Button>
+      <div className="container mx-auto px-4 py-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <CarIcon className="w-16 h-16 mx-auto mb-4 text-blue-600" />
+            <h1 className="text-4xl font-display font-bold mb-2">Rent a Car</h1>
+            <p className="text-xl text-slate-600 dark:text-slate-400">
+              Find the perfect vehicle for your journey
+            </p>
+          </div>
+
+          <Card className="p-8">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const pickupValue = formData.get('pickupDate') as string;
+              const returnValue = formData.get('returnDate') as string;
+              
+              // Validate return date is after pickup date
+              if (pickupValue && returnValue) {
+                const pickupDateObj = new Date(pickupValue);
+                const returnDateObj = new Date(returnValue);
+                
+                if (returnDateObj <= pickupDateObj) {
+                  toast.error('Return date must be after pick-up date');
+                  return;
+                }
+              }
+              
+              const params = new URLSearchParams({
+                location: formData.get('location') as string,
+                pickupDate: pickupValue,
+                returnDate: returnValue,
+              });
+              navigate(`/cars?${params.toString()}`);
+            }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="md:col-span-2">
+                  <Input
+                    type="text"
+                    name="location"
+                    label="Pick-up Location"
+                    placeholder="e.g., Chicago, Miami, New York"
+                    required
+                  />
+                </div>
+                <Input
+                  type="date"
+                  name="pickupDate"
+                  label="Pick-up Date"
+                  min={new Date().toISOString().split('T')[0]}
+                  value={pickupDate}
+                  onChange={(e) => {
+                    setPickupDate(e.target.value);
+                    // If return is before new pickup, clear return
+                    if (returnDate && e.target.value >= returnDate) {
+                      setReturnDate('');
+                    }
+                  }}
+                  required
+                />
+                <Input
+                  type="date"
+                  name="returnDate"
+                  label="Return Date"
+                  min={pickupDate || new Date().toISOString().split('T')[0]}
+                  value={returnDate}
+                  onChange={(e) => setReturnDate(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" fullWidth size="lg">
+                Search Cars
+              </Button>
+            </form>
+          </Card>
+
+          <div className="mt-8 text-center">
+            <p className="text-sm text-slate-500 mb-2">Popular locations:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {['Chicago', 'Miami', 'Houston', 'Orlando', 'New York', 'Los Angeles'].map((city) => (
+                <button
+                  key={city}
+                  onClick={() => {
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const weekLater = new Date();
+                    weekLater.setDate(weekLater.getDate() + 7);
+                    navigate(`/cars?location=${city}&pickupDate=${tomorrow.toISOString().split('T')[0]}&returnDate=${weekLater.toISOString().split('T')[0]}`);
+                  }}
+                  className="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm transition-colors"
+                >
+                  {city}
+                </button>
+              ))}
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -124,7 +240,7 @@ const CarSearch = () => {
 
                     <div className="flex flex-wrap gap-3 mb-4">
                       <span className="badge-primary capitalize">{car.carType}</span>
-                      <span className="badge-primary capitalize">{car.transmissionType}</span>
+                      <span className="badge-primary capitalize">{car.transmissionType || 'Automatic'}</span>
                       <span className="badge-primary flex items-center space-x-1">
                         <Users className="w-3 h-3" />
                         <span>{car.seats} seats</span>

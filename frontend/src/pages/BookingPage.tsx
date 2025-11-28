@@ -74,9 +74,9 @@ export default function BookingPage() {
           <h3>Booking Summary</h3>
           {type === 'flight' && (
             <div>
-              <p><strong>Flight:</strong> {(selectedListing as Flight).airline} {(selectedListing as Flight).flightNumber}</p>
-              <p><strong>Route:</strong> {(selectedListing as Flight).origin} → {(selectedListing as Flight).destination}</p>
-              <p><strong>Price per passenger:</strong> ${(selectedListing as Flight).price.toFixed(2)}</p>
+              <p><strong>Flight:</strong> {(selectedListing as Flight).airlineName || (selectedListing as Flight).airline} {(selectedListing as Flight).flightNumber}</p>
+              <p><strong>Route:</strong> {(selectedListing as Flight).departureAirport || (selectedListing as Flight).origin} → {(selectedListing as Flight).arrivalAirport || (selectedListing as Flight).destination}</p>
+              <p><strong>Price per passenger:</strong> ${((selectedListing as Flight).pricePerTicket || (selectedListing as Flight).price || 0).toFixed(2)}</p>
             </div>
           )}
           {type === 'hotel' && (

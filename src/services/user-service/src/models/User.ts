@@ -1,15 +1,17 @@
 export interface User {
   userId: string
-  ssn: string
-  name: string
-  address: string
-  city: string
-  state: string
-  zip: string
-  phone: string
+  firstName: string
+  lastName: string
   email: string
   hashedPassword: string
-  profileImage?: string
+  phone?: string
+  address?: string
+  city?: string
+  state?: string
+  zipCode?: string
+  profileImageId?: string
+  status: string
+  isAdmin: boolean
   createdAt: Date
   updatedAt: Date
 }

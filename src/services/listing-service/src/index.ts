@@ -24,7 +24,7 @@ app.use('/api/listings/cars', carController)
 
 app.use(errorHandler)
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`Listing Service running on port ${PORT}`)
 })
 

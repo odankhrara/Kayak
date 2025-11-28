@@ -4,7 +4,7 @@ export { getMongoClient, getMongoDb, closeMongoConnection } from './db/mongoClie
 export { getRedisClient, closeRedisConnection } from './db/redisClient'
 
 // Kafka
-export { createProducer, createConsumer } from './kafka/kafkaClient'
+export { getProducer, getConsumer, sendKafkaMessage } from './kafka/kafkaClient'
 export { KAFKA_TOPICS } from './kafka/topics'
 
 // Middleware

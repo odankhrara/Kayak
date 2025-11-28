@@ -1,7 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { requireAuth, requireAdmin } from '@kayak/common/src/middleware/auth'
-import { sendKafkaMessage } from '../../common/src/kafka/kafkaClient'
-import { KAFKA_TOPICS } from '../../common/src/kafka/topics'
+import { requireAuth, requireAdmin, sendKafkaMessage, KAFKA_TOPICS } from '@kayak/common'
 import { BillingService } from '../services/billingService'
 
 const router = Router()

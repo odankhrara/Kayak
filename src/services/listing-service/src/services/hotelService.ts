@@ -1,5 +1,6 @@
 import { HotelRepository } from '../repositories/hotelRepository'
 import { Hotel } from '../models/Hotel'
+import { redisCache } from '../../../common/src/cache/redisCache'
 
 export class HotelService {
   private repository = new HotelRepository()
@@ -99,8 +100,20 @@ export class HotelService {
         throw new Error('Rating must be between 0 and 5')
       }
 
-      // Search hotels
+      // Generate cache key from filters
+      const cacheKey = `hotels:search:${JSON.stringify(filters)}`
+      
+      // Try cache first
+      const cachedHotels = await redisCache.get<any[]>(cacheKey)
+      if (cachedHotels) {
+        return cachedHotels
+      }
+
+      // Cache miss - query database
       const hotels = await this.repository.search(filters)
+
+      // Store in cache (5 minutes TTL)
+      await redisCache.set(cacheKey, hotels, 300)
 
       return hotels
     } catch (error: any) {
@@ -109,17 +122,28 @@ export class HotelService {
   }
 
   /**
-   * Get hotel by ID with details
+   * Get hotel by ID with details (with caching)
    */
   async getById(hotelId: string): Promise<any> {
     if (!hotelId || hotelId.trim().length === 0) {
       throw new Error('Hotel ID is required')
     }
 
+    // Try cache first
+    const cacheKey = `hotel:${hotelId}`
+    const cachedHotel = await redisCache.get<any>(cacheKey)
+    if (cachedHotel) {
+      return cachedHotel
+    }
+
+    // Cache miss - query database
     const hotel = await this.repository.getById(hotelId)
     if (!hotel) {
       throw new Error(`Hotel ${hotelId} not found`)
     }
+
+    // Store in cache (10 minutes TTL)
+    await redisCache.set(cacheKey, hotel, 600)
 
     return hotel
   }
@@ -166,7 +190,7 @@ export class HotelService {
   }
 
   /**
-   * Update hotel (Admin only)
+   * Update hotel (Admin only) - with cache invalidation
    */
   async updateHotel(hotelId: string, updates: any): Promise<any> {
     const hotel = await this.repository.getById(hotelId)
@@ -182,7 +206,15 @@ export class HotelService {
       throw new Error('Total rooms must be at least 1')
     }
 
-    return await this.repository.update(hotelId, updates)
+    // Update in database
+    const updatedHotel = await this.repository.update(hotelId, updates)
+
+    // Invalidate caches
+    await redisCache.del(`hotel:${hotelId}`)
+    await redisCache.delPattern('hotels:search:*')
+    console.log(`🔄 Cache invalidated for hotel ${hotelId}`)
+
+    return updatedHotel
   }
 
   /**
@@ -267,7 +299,7 @@ export class HotelService {
   }
 
   /**
-   * Delete hotel (Admin only)
+   * Delete hotel (Admin only) - with cache invalidation
    */
   async deleteHotel(hotelId: string): Promise<void> {
     const hotel = await this.repository.getById(hotelId)
@@ -275,6 +307,12 @@ export class HotelService {
       throw new Error(`Hotel ${hotelId} not found`)
     }
 
+    // Delete from database
     await this.repository.delete(hotelId)
+
+    // Invalidate caches
+    await redisCache.del(`hotel:${hotelId}`)
+    await redisCache.delPattern('hotels:search:*')
+    console.log(`🗑️  Cache invalidated for deleted hotel ${hotelId}`)
   }
 }

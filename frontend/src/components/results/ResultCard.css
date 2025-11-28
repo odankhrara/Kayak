@@ -30,6 +30,16 @@
   font-size: 1.5rem;
   font-weight: bold;
   color: var(--secondary-color);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.price-label {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: #666;
+  margin-top: 0.25rem;
 }
 
 .result-card-body {
@@ -61,6 +71,16 @@
 .route-arrow {
   font-size: 1.5rem;
   color: var(--primary-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.duration {
+  font-size: 0.75rem;
+  color: #666;
+  white-space: nowrap;
 }
 
 .result-location p {
@@ -115,9 +135,21 @@
 .result-details {
   display: flex;
   gap: 1rem;
+  align-items: center;
   color: #666;
   font-size: 0.9rem;
   margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.class-badge {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: capitalize;
 }
 
 .result-card-footer {

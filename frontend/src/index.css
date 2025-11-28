@@ -3,10 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  
   body {
     @apply bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 dark:from-slate-900 dark:via-blue-950 dark:to-purple-950 text-slate-900 dark:text-slate-100;
     font-family: 'Inter', sans-serif;
@@ -117,6 +113,49 @@
     }
     100% {
       background-position: 200% 0;
+    }
+  }
+  
+  /* Cute icon animations */
+  @keyframes trail-fade {
+    0% {
+      opacity: 0.8;
+      transform: translateX(0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-8px) scale(0.5);
+    }
+  }
+  
+  @keyframes smoke-puff {
+    0% {
+      opacity: 0.6;
+      transform: translateX(0) translateY(0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-12px) translateY(-6px) scale(1.5);
+    }
+  }
+  
+  @keyframes sparkle {
+    0%, 100% {
+      opacity: 0;
+      transform: scale(0);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
     }
   }
   

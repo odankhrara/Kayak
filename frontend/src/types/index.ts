@@ -48,10 +48,16 @@ export interface Flight {
   arrivalDatetime: string;
   durationMinutes: number;
   flightClass: 'economy' | 'business' | 'first';
-  ticketPrice: number;
+  pricePerTicket: number;  // Changed from ticketPrice to match backend
+  ticketPrice?: number;  // Keep for backwards compatibility
   totalSeats: number;
   availableSeats: number;
   flightRating?: number;
+  rating?: number;  // Alternative field name
+  reviewsCount?: number;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface FlightSearchFilters {

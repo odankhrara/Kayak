@@ -84,7 +84,7 @@ A distributed, microservices-based travel booking platform simulating Kayak's co
 ## 📁 Project Structure
 
 ```
-Project_KayakSimulation/
+Kayak/
 ├── src/                          # Backend microservices
 │   ├── services/
 │   │   ├── user-service/        # User management

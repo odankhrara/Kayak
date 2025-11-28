@@ -103,7 +103,7 @@ export class BookingService {
       } else if (bookingType === 'car') {
         // Check car availability
         const [carRows] = await connection.execute(
-          'SELECT availability_status FROM cars WHERE car_id = ? FOR UPDATE',
+          'SELECT available FROM cars WHERE car_id = ? FOR UPDATE',
           [entityId]
         )
         const car = (carRows as any[])[0]
@@ -111,14 +111,14 @@ export class BookingService {
         if (!car) {
           throw new Error(`Car ${entityId} not found`)
         }
-        if (car.availability_status !== 'available') {
+        if (car.available !== 1 && car.available !== true) {
           throw new Error(`Car ${entityId} is not available`)
         }
 
         // Mark car as unavailable
         await connection.execute(
-          'UPDATE cars SET availability_status = ? WHERE car_id = ?',
-          ['unavailable', entityId]
+          'UPDATE cars SET available = ? WHERE car_id = ?',
+          [0, entityId]
         )
       }
     } catch (error: any) {
@@ -178,38 +178,40 @@ export class BookingService {
 
       // 3. Create booking record
       const bookingRef = this.generateBookingRef(bookingData.bookingType)
+      const bookingId = `BK${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+      const confirmationCode = this.generateBookingRef(bookingData.bookingType)
+      
       const booking = await this.bookingRepository.create({
-        userId: bookingData.userId,
-        bookingType: bookingData.bookingType,
-        bookingRef,
-        status: 'pending',
-        checkInDate: bookingData.checkInDate,
-        checkOutDate: bookingData.checkOutDate,
-        bookingDate: new Date().toISOString().split('T')[0],
-        totalAmount: bookingData.totalAmount
+        booking_id: bookingId,
+        user_id: bookingData.userId,
+        booking_type: bookingData.bookingType,
+        booking_reference: bookingData.entityId,
+        confirmation_code: confirmationCode,
+        start_date: bookingData.checkInDate,
+        end_date: bookingData.checkOutDate,
+        guests: bookingData.quantity,
+        total_amount: bookingData.totalAmount,
+        special_requests: null
       }, connection)
 
       // 4. Process payment and create billing record
+      const billingId = `BILL${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+      const transactionId = `TXN${Date.now()}`
+      const subtotal = bookingData.totalAmount / 1.1 // Assuming 10% tax
+      const tax = bookingData.totalAmount - subtotal
+      
       const billing = await this.billingRepository.create({
-        userId: bookingData.userId,
-        bookingId: booking.bookingId,
-        bookingType: bookingData.bookingType,
-        amount: bookingData.totalAmount,
-        paymentMethod: bookingData.paymentMethod,
-        status: 'completed',
-        transactionDate: new Date(),
-        invoiceDetails: {
-          bookingRef,
-          entityId: bookingData.entityId,
-          quantity: bookingData.quantity,
-          checkIn: bookingData.checkInDate,
-          checkOut: bookingData.checkOutDate
-        },
-        receiptDetails: {
-          transactionId: `TXN${Date.now()}`,
-          paymentMethod: bookingData.paymentMethod,
-          lastFourDigits: bookingData.paymentDetails.cardNumber?.slice(-4) || 'N/A'
-        }
+        billing_id: billingId,
+        user_id: bookingData.userId,
+        booking_id: bookingId,
+        booking_type: bookingData.bookingType,
+        transaction_id: transactionId,
+        amount: subtotal,
+        tax: tax,
+        total_amount: bookingData.totalAmount,
+        payment_method: bookingData.paymentMethod,
+        transaction_status: 'completed',
+        invoice_id: `INV${Date.now()}`
       }, connection)
 
       // 5. Update booking status to 'confirmed'
@@ -330,23 +332,21 @@ export class BookingService {
       await this.bookingRepository.cancelBooking(bookingId, connection)
 
       // Create refund billing record
+      const refundBillingId = `BILL${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+      const refundTransactionId = `REFUND${Date.now()}`
+      
       await this.billingRepository.create({
-        userId: booking.userId,
-        bookingId: booking.bookingId,
-        bookingType: booking.bookingType,
+        billing_id: refundBillingId,
+        user_id: booking.userId,
+        booking_id: booking.bookingId,
+        booking_type: booking.bookingType,
+        transaction_id: refundTransactionId,
         amount: -refundAmount,
-        paymentMethod: 'refund',
-        status: 'completed',
-        transactionDate: new Date(),
-        invoiceDetails: {
-          reason: reason || 'Booking cancelled by user',
-          originalAmount: booking.totalAmount,
-          refundPercentage: refundPercentage * 100
-        },
-        receiptDetails: {
-          transactionId: `REFUND${Date.now()}`,
-          refundAmount
-        }
+        tax: 0,
+        total_amount: -refundAmount,
+        payment_method: 'credit_card', // Use original payment method
+        transaction_status: 'refunded',
+        invoice_id: `INV${Date.now()}`
       }, connection)
 
       await connection.commit()
