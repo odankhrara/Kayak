@@ -1,7 +1,7 @@
 """FastAPI main application"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import health_router, bundles_router, watches_router
+from app.api import health_router, bundles_router, watches_router, chat_router
 from app.websocket import websocket_router
 from app.db.session import create_db_and_tables
 import os
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(bundles_router)
 app.include_router(watches_router)
+app.include_router(chat_router)
 app.include_router(websocket_router)
 
 

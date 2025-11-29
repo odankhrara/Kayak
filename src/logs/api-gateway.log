@@ -1,0 +1,41 @@
+
+> @kayak/api-gateway@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/index.ts
+
+[INFO] 15:08:30 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[HPM] Proxy created: /  -> http://localhost:8001
+[HPM] Proxy rewrite rule created: "^/api/users" ~> "/api/users"
+[HPM] Proxy created: /  -> http://localhost:8002
+[HPM] Proxy rewrite rule created: "^/api/listings" ~> "/api/listings"
+[HPM] Proxy created: /  -> http://localhost:8003
+[HPM] Proxy rewrite rule created: "^/api/bookings" ~> "/api/bookings"
+[HPM] Proxy created: /  -> http://localhost:8003
+[HPM] Proxy rewrite rule created: "^/api/billing" ~> "/api/billing"
+[HPM] Proxy created: /  -> http://localhost:8004
+[HPM] Proxy rewrite rule created: "^/api/analytics" ~> "/api/analytics"
+[HPM] Proxy created: /  -> http://localhost:8006
+[HPM] Proxy rewrite rule created: "^/api/admin" ~> "/api/admin"
+[HPM] Proxy created: /  -> http://localhost:8005
+[HPM] Proxy rewrite rule created: "^/api/ai" ~> ""
+API Gateway running on port 4000
+Failed to initialize Kafka producer: TypeError: (0 , kafkaClient_1.createProducer) is not a function
+    at getProducer (/Users/omdankhara5803/Desktop/Kafka-demo/Kayak/src/services/api-gateway/src/routes/trackingRoutes.ts:11:30)
+    at Object.<anonymous> (/Users/omdankhara5803/Desktop/Kafka-demo/Kayak/src/services/api-gateway/src/routes/trackingRoutes.ts:19:1)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1760:14)
+    at Module._compile (/Users/omdankhara5803/Desktop/Kafka-demo/Kayak/src/services/api-gateway/node_modules/source-map-support/source-map-support.js:568:25)
+    at Module.m._compile (/private/var/folders/32/ctmy89l53gsbw2slxt_kqt840000gn/T/ts-node-dev-hook-05896366926316887.js:69:33)
+    at node:internal/modules/cjs/loader:1893:10
+    at require.extensions..jsx.require.extensions..js (/private/var/folders/32/ctmy89l53gsbw2slxt_kqt840000gn/T/ts-node-dev-hook-05896366926316887.js:114:20)
+    at require.extensions.<computed> (/private/var/folders/32/ctmy89l53gsbw2slxt_kqt840000gn/T/ts-node-dev-hook-05896366926316887.js:71:20)
+    at Object.nodeDevHook [as .ts] (/Users/omdankhara5803/Desktop/Kafka-demo/Kayak/src/services/api-gateway/node_modules/ts-node-dev/lib/hook.js:63:13)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+(node:21028) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[Proxy] POST /api/users/register -> http://localhost:8001/api/users/register
+[Proxy] Response: 201
+[Proxy] POST /api/users/login -> http://localhost:8001/api/users/login
+[Proxy] Response: 200
+[Proxy] GET /api/bookings/user/650-75-0400 -> http://localhost:8003/api/bookings/user/650-75-0400
+[Proxy] Response: 500
+[Proxy] GET /api/bookings/user/650-75-0400 -> http://localhost:8003/api/bookings/user/650-75-0400
+[Proxy] Response: 500
