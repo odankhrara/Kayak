@@ -10,6 +10,7 @@
 | **User Service** | 8001 | http://localhost:8001 | User authentication & profile management |
 | **Listing Service** | 8002 | http://localhost:8002 | Flights, hotels, and car listings |
 | **Booking-Billing Service** | 8003 | http://localhost:8003 | Booking creation & payment processing |
+| **Admin Service** | 8006 | http://localhost:8006 | Admin orchestration/proxy (secured) |
 | **Analytics Service** | 8004 | http://localhost:8004 | Real-time analytics & reporting |
 
 ### **Frontend**
@@ -177,4 +178,3 @@ lsof -i :5173
 ---
 
 **Last Updated:** November 28, 2025
-

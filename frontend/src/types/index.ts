@@ -12,6 +12,7 @@ export interface User {
   profileImage?: string;
   createdAt?: string;
   updatedAt?: string;
+  isAdmin?: boolean;
 }
 
 export interface RegisterData {
@@ -231,4 +232,3 @@ export interface SearchState {
   type: 'flight' | 'hotel' | 'car';
   filters: FlightSearchFilters | HotelSearchFilters | CarSearchFilters;
 }
-

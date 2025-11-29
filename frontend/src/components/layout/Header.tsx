@@ -57,6 +57,14 @@ const Header = () => {
                 My Bookings
               </Link>
             )}
+            {isAuthenticated && (user?.isAdmin) && (
+              <Link
+                to="/admin/dashboard"
+                className="text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
             {isAuthenticated && user?.role === 'admin' && (
               <Link
                 to="/admin/billings"
@@ -166,7 +174,16 @@ const Header = () => {
                 My Bookings
               </Link>
             )}
-            {isAuthenticated && user?.role === 'admin' && (
+            {isAuthenticated && (user?.isAdmin || user?.role === 'admin') && (
+              <Link
+                to="/admin/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-3 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
+            {isAuthenticated && (user?.isAdmin || user?.role === 'admin') && (
               <Link
                 to="/admin/billings"
                 onClick={() => setMobileMenuOpen(false)}
@@ -222,4 +239,3 @@ const Header = () => {
 };
 
 export default Header;
-

@@ -1,6 +1,7 @@
 import axios from 'axios'
+import api from '../services/api'
 
-const API_BASE_URL = '/api/admin'
+const API_BASE_URL = 'http://localhost:8006/api/admin'
 
 export interface RevenueStats {
   totalRevenue: number
@@ -17,12 +18,13 @@ export interface BookingStats {
 
 export const adminApi = {
   getRevenueStats: async (): Promise<RevenueStats> => {
-    const response = await axios.get(`${API_BASE_URL}/revenue`)
+    const response = await api.get(`${API_BASE_URL}/revenue`)
+    console.log('Revenue Stats Response:', response);
     return response.data
   },
 
   getBookingStats: async (): Promise<BookingStats> => {
-    const response = await axios.get(`${API_BASE_URL}/bookings`)
+    const response = await api.get(`${API_BASE_URL}/bookings`)
     return response.data
   },
 
@@ -84,4 +86,3 @@ export const adminApi = {
     return response.data
   },
 }
-
