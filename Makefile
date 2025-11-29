@@ -106,7 +106,8 @@ start: db-start db-wait start-backend start-frontend
 start-backend:
 	@echo "🚀 Starting backend services..."
 	@mkdir -p src/logs
-	@cd src && ./start-all.sh || true
+	@export MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_USER=root MYSQL_PASSWORD=password MYSQL_DATABASE=kayak && \
+	cd src && ./start-all.sh || true
 	@sleep 3
 	@echo "✅ Backend services started"
 

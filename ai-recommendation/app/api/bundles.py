@@ -1,7 +1,7 @@
 """Bundle API endpoints"""
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlmodel import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from app.db.session import get_session
 from app.services.concierge_agent import ConciergeAgent
 from app.services.deal_selector import DealSelector
@@ -107,6 +107,85 @@ async def get_bundle(
         cars=[],
         created_at=bundle.created_at
     )
+
+
+@router.post("/query", response_model=List[BundleResponse])
+async def query_bundles(
+    body: Dict[str, Any] = Body(None),
+    query: str = Query(None, description="Natural language query (alternative to body)"),
+    user_id: int = Query(None, description="User ID"),
+    session: Session = Depends(get_session)
+):
+    """
+    Query bundles using natural language
+    
+    Accepts query as query parameter or in request body:
+    - Query param: POST /bundles/query?query=Weekend in Tokyo...
+    - Request body: POST /bundles/query with {"query": "Weekend in Tokyo..."}
+    
+    Example: "Weekend in Tokyo under $900 for two, SFO departure, pet-friendly"
+    """
+    from app.services.nlu_parser import NLUParser
+    from app.services.concierge_agent import ConciergeAgent
+    
+    # Support both query param and request body
+    query_text = query
+    if not query_text and body:
+        query_text = body.get('query')
+    
+    if not query_text:
+        raise HTTPException(status_code=400, detail="query is required")
+    
+    # Parse the natural language query
+    nlu_parser = NLUParser()
+    parsed = nlu_parser.parse(query_text)
+    
+    # Convert to search params
+    search_params = BundleSearchParams(
+        origin=parsed.get("origin"),
+        destination=parsed.get("destination"),
+        city=parsed.get("city"),
+        max_price=parsed.get("budget"),
+        tags=parsed.get("constraints") if parsed.get("constraints") else None
+    )
+    
+    # Get recommendations
+    concierge = ConciergeAgent(session)
+    bundles = concierge.recommend_bundles(search_params, limit=5)
+    
+    # Convert to response format
+    result = []
+    for bundle in bundles:
+        flight_ids = [int(id) for id in bundle.flight_deal_ids.split(",") if id.strip()]
+        hotel_ids = [int(id) for id in bundle.hotel_deal_ids.split(",") if id.strip()]
+        
+        flights = []
+        for fid in flight_ids:
+            flight = session.get(FlightDeal, fid)
+            if flight:
+                flights.append(FlightDealResponse.model_validate(flight))
+        
+        hotels = []
+        for hid in hotel_ids:
+            hotel = session.get(HotelDeal, hid)
+            if hotel:
+                hotels.append(HotelDealResponse.model_validate(hotel))
+        
+        bundle_response = BundleResponse(
+            id=bundle.id,
+            name=bundle.name,
+            description=bundle.description,
+            total_price=bundle.total_price,
+            savings=bundle.savings,
+            tags=[tag.strip() for tag in bundle.tags.split(",") if tag.strip()],
+            flights=flights,
+            hotels=hotels,
+            cars=[],
+            created_at=bundle.created_at
+        )
+        result.append(bundle_response)
+    
+    return result
 
 
 @router.post("", response_model=BundleResponse)

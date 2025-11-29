@@ -2,6 +2,7 @@
 from .health import router as health_router
 from .bundles import router as bundles_router
 from .watches import router as watches_router
+from .chat import router as chat_router
 
-__all__ = ["health_router", "bundles_router", "watches_router"]
+__all__ = ["health_router", "bundles_router", "watches_router", "chat_router"]
 

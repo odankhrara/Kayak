@@ -1,7 +1,7 @@
 """Watch API endpoints"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 from app.db.session import get_session
 from app.models import Watch
 from app.schemas import WatchCreate, WatchUpdate, WatchResponse
@@ -12,12 +12,13 @@ router = APIRouter(prefix="/watches", tags=["watches"])
 @router.post("", response_model=WatchResponse)
 async def create_watch(
     watch_data: WatchCreate,
-    user_id: int,  # In real app, get from auth token
+    user_id: int = Query(..., description="User ID for the watch"),
     session: Session = Depends(get_session)
 ):
     """Create a new watch"""
+    
     watch = Watch(
-        user_id=user_id,
+        user_id=watch_user_id,
         origin=watch_data.origin,
         destination=watch_data.destination,
         city=watch_data.city,

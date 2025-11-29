@@ -1,0 +1,31 @@
+
+> kayak-frontend@1.0.0 dev
+> vite
+
+
+  VITE v7.2.4  ready in 507 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: use --host to expose
+3:09:47 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:09:57 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:09:58 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:09:59 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:10:00 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:10:08 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:11:27 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:11:32 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:11:38 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:11:39 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:11:55 PM [vite] (client) hmr update /src/components/chat/AIAssistant.css
+3:12:01 PM [vite] (client) hmr update /src/components/chat/AIAssistant.css
+3:12:01 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:12:01 PM [vite] (client) hmr update /src/index.css, /src/components/layout/Header.tsx
+3:17:01 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:17:09 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:17:12 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:17:40 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:28:13 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:28:15 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:28:30 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx
+3:28:33 PM [vite] (client) hmr update /src/index.css, /src/components/chat/AIAssistant.tsx

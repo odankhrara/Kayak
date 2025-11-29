@@ -42,8 +42,8 @@ start_service() {
         npm install --silent
     fi
     
-    # Start service in background
-    npm run dev > "$BASE_DIR/logs/${service_name}.log" 2>&1 &
+    # Start service in background with MySQL environment variables
+    env MYSQL_HOST=${MYSQL_HOST} MYSQL_PORT=${MYSQL_PORT} MYSQL_USER=${MYSQL_USER} MYSQL_PASSWORD=${MYSQL_PASSWORD} MYSQL_DATABASE=${MYSQL_DATABASE} npm run dev > "$BASE_DIR/logs/${service_name}.log" 2>&1 &
     echo $! > "$BASE_DIR/logs/${service_name}.pid"
     sleep 2
     echo -e "${GREEN}✅ $service_name started (PID: $(cat "$BASE_DIR/logs/${service_name}.pid"))${NC}"
@@ -51,6 +51,14 @@ start_service() {
 
 # Create logs directory
 mkdir -p "$BASE_DIR/logs"
+
+# Set MySQL configuration for Docker MySQL on port 3307
+# (Docker MySQL is mapped to 3307 because system MySQL uses 3306)
+export MYSQL_HOST=localhost
+export MYSQL_PORT=3307
+export MYSQL_USER=root
+export MYSQL_PASSWORD=password
+export MYSQL_DATABASE=kayak
 
 # Check Docker
 if ! docker ps >/dev/null 2>&1; then

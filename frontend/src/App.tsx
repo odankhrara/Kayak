@@ -21,6 +21,7 @@ import BookingConfirmation from './pages/BookingConfirmation';
 import AdminBillingPage from './pages/AdminBillingPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import HostAnalysisPage from './pages/HostAnalysisPage';
+import AIAssistantPage from './pages/AIAssistantPage';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -115,6 +116,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ai-assistant"
+              element={
+                <ProtectedRoute>
+                  <AIAssistantPage />
                 </ProtectedRoute>
               }
             />
