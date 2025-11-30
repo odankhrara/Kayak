@@ -90,10 +90,13 @@ start_service "listing-service" "$SERVICES_DIR/listing-service" 8002
 # 5. Booking-Billing Service
 start_service "booking-billing-service" "$SERVICES_DIR/booking-billing-service" 8003
 
-# 6. Analytics Service
+# 6. Admin Service
+start_service "admin-service" "$SERVICES_DIR/admin-service" 8006
+
+# 7. Analytics Service
 start_service "analytics-service" "$SERVICES_DIR/analytics-service" 8004
 
-# 7. Frontend
+# 8. Frontend
 echo ""
 echo "🌐 Starting Frontend..."
 cd "$FRONTEND_DIR"
@@ -124,13 +127,13 @@ echo ""
 echo "📍 Service URLs:"
 echo "   - Frontend:        http://localhost:3000"
 echo "   - API Gateway:     http://localhost:4000"
-echo "   - User Service:   http://localhost:8001"
+echo "   - User Service:    http://localhost:8001"
 echo "   - Listing Service: http://localhost:8002"
 echo "   - Booking Service: http://localhost:8003"
+echo "   - Admin Service:   http://localhost:8006"
 echo "   - Analytics:       http://localhost:8004"
 echo ""
 echo "📋 Logs are in: $BASE_DIR/logs/"
 echo ""
 echo "To stop all services, run: ./stop-all.sh"
 echo "Or manually: kill \$(cat logs/*.pid)"
-

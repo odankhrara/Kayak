@@ -7,10 +7,13 @@ import Input from '../components/common/Input';
 import Select from '../components/common/Select';
 import DatePicker from '../components/common/DatePicker';
 import { POPULAR_AIRPORTS, FLIGHT_CLASSES, POPULAR_CITIES, CAR_TYPES, PASSENGER_OPTIONS, GUEST_OPTIONS, ROOM_OPTIONS } from '../utils/constants';
+import { useAuthStore } from '../store/authStore';
 
 const Home = () => {
   const [activeTab, setActiveTab] = useState<'flights' | 'hotels' | 'cars'>('flights');
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isAdmin = user?.isAdmin;
 
   // Flight search state
   const [flightOrigin, setFlightOrigin] = useState('');
@@ -119,11 +122,12 @@ const Home = () => {
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="max-w-5xl mx-auto glass-strong rounded-3xl p-8 shadow-2xl"
-          >
-            {/* Tabs */}
-            <div className="flex space-x-2 mb-8">
+          transition={{ duration: 0.8, delay: 0.2 }}
+          className="max-w-5xl mx-auto glass-strong rounded-3xl p-8 shadow-2xl"
+        >
+          {/* Tabs */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-8">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setActiveTab('flights')}
                 className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
@@ -187,6 +191,17 @@ const Home = () => {
                 <span>Cars</span>
               </button>
             </div>
+
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                onClick={() => navigate('/admin/dashboard')}
+                className="md:self-end"
+              >
+                Dashboard
+              </Button>
+            )}
+          </div>
 
             {/* Flight Search Form */}
             {activeTab === 'flights' && (
@@ -435,4 +450,3 @@ const Home = () => {
 };
 
 export default Home;
-

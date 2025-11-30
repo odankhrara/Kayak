@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
+import { useAuthStore } from '../store/authStore'
 import { adminApi } from '../api/adminApi'
 import { RevenueByCityChart } from '../components/charts/RevenueByCityChart'
 import { TopPropertiesChart } from '../components/charts/TopPropertiesChart'
+import { BookingStatusPieChart } from '../components/charts/BookingStatusPieChart'
 import './AdminDashboardPage.css'
 
 export default function AdminDashboardPage() {
-  const { user, setLoading, setError } = useStore()
+  const { setLoading, setError } = useStore()
+  const { user } = useAuthStore()
   const [revenueStats, setRevenueStats] = useState<any>(null)
   const [bookingStats, setBookingStats] = useState<any>(null)
 
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (user && user.isAdmin) {
       loadStats()
     }
   }, [user])
@@ -32,7 +35,7 @@ export default function AdminDashboardPage() {
     }
   }
 
-  if (user?.role !== 'admin') {
+  if (user && !user.isAdmin) {
     return <div className="loading">Access denied. Admin access required.</div>
   }
 
@@ -63,20 +66,9 @@ export default function AdminDashboardPage() {
         <TopPropertiesChart data={revenueStats.topProperties} />
       )}
 
-      {bookingStats && (
-        <div className="booking-stats">
-          <h3>Bookings by Status</h3>
-          <div className="stats-grid">
-            {bookingStats.bookingsByStatus?.map((stat: any) => (
-              <div key={stat.status} className="stat-item">
-                <span className="stat-label">{stat.status}</span>
-                <span className="stat-count">{stat.count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {bookingStats && bookingStats.bookingsByStatus && (
+        <BookingStatusPieChart data={bookingStats.bookingsByStatus} />
       )}
     </div>
   )
 }
-

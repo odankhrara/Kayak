@@ -56,7 +56,7 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
   
-  if (user?.role !== 'admin') {
+  if (!user?.isAdmin) {
     return <Navigate to="/" replace />;
   }
   
@@ -180,4 +180,3 @@ function App() {
 }
 
 export default App;
-

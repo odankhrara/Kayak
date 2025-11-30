@@ -57,13 +57,14 @@ const Header = () => {
                 My Bookings
               </Link>
             )}
-            <Link
-              to={isAuthenticated ? "/ai-assistant" : "/login"}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 font-medium transition-all shadow-lg hover:shadow-xl"
-            >
-              <Bot className="w-4 h-4" />
-              <span>AI Assistant</span>
-            </Link>
+            {isAuthenticated && (user?.isAdmin) && (
+              <Link
+                to="/admin/dashboard"
+                className="text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
             {isAuthenticated && user?.role === 'admin' && (
               <Link
                 to="/admin/billings"
@@ -181,15 +182,16 @@ const Header = () => {
                 My Bookings
               </Link>
             )}
-            <Link
-              to={isAuthenticated ? "/ai-assistant" : "/login"}
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center space-x-2 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transition-all"
-            >
-              <Bot className="w-4 h-4" />
-              <span>AI Assistant</span>
-            </Link>
-            {isAuthenticated && user?.role === 'admin' && (
+            {isAuthenticated && (user?.isAdmin || user?.role === 'admin') && (
+              <Link
+                to="/admin/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-3 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
+            {isAuthenticated && (user?.isAdmin || user?.role === 'admin') && (
               <Link
                 to="/admin/billings"
                 onClick={() => setMobileMenuOpen(false)}
@@ -245,4 +247,3 @@ const Header = () => {
 };
 
 export default Header;
-
