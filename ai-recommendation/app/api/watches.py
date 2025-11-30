@@ -18,7 +18,7 @@ async def create_watch(
     """Create a new watch"""
     
     watch = Watch(
-        user_id=watch_user_id,
+        user_id=user_id,
         origin=watch_data.origin,
         destination=watch_data.destination,
         city=watch_data.city,

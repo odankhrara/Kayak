@@ -24,7 +24,17 @@ class DealSelector:
         if origin:
             statement = statement.where(FlightDeal.origin.ilike(f"%{origin}%"))
         if destination:
-            statement = statement.where(FlightDeal.destination.ilike(f"%{destination}%"))
+            # Clean up destination - remove "from" if accidentally captured
+            dest_clean = destination.replace("From", "").replace("from", "").strip()
+            # Don't filter by destination if it's a flexible one
+            flexible_destinations = ['warm region', 'tropical region', 'anywhere', 'anywhere warm']
+            dest_lower = dest_clean.lower()
+            if dest_lower not in flexible_destinations and "anywhere" not in dest_lower:
+                # Try exact match first, then partial match
+                statement = statement.where(
+                    (FlightDeal.destination.ilike(f"%{dest_clean}%")) |
+                    (FlightDeal.destination.ilike(f"%{destination}%"))
+                )
         if max_price:
             statement = statement.where(FlightDeal.discounted_price <= max_price)
         
@@ -41,7 +51,13 @@ class DealSelector:
         statement = select(HotelDeal).where(HotelDeal.is_active == True)
         
         if city:
-            statement = statement.where(HotelDeal.city.ilike(f"%{city}%"))
+            # Clean up city - remove "from" if accidentally captured
+            city_clean = city.replace("From", "").replace("from", "").strip()
+            # Try exact match first, then partial match
+            statement = statement.where(
+                (HotelDeal.city.ilike(f"%{city_clean}%")) |
+                (HotelDeal.city.ilike(f"%{city}%"))
+            )
         if max_price:
             statement = statement.where(HotelDeal.discounted_price_per_night <= max_price)
         

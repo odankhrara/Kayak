@@ -80,16 +80,30 @@ class ChatContextManager:
             del self.contexts[session_id]
     
     def get_missing_fields(self, session_id: str) -> list:
-        """Get list of missing required fields"""
+        """
+        Get list of missing required fields
+        Returns at most 1 missing field to ask (max 1 clarifying question)
+        """
         context = self.get_context(session_id)
         missing = []
         
+        # Priority order: origin, destination, budget
+        # Only return the first missing field (max 1 clarifying question)
         if not context.get('origin'):
             missing.append('origin')
-        if not context.get('destination') and not context.get('city'):
-            missing.append('destination')
+            return missing  # Return immediately - max 1 question
+        
+        # Don't require destination if it's flexible (anywhere, warm region, etc.)
+        destination = context.get('destination') or context.get('city')
+        if not destination or (destination not in ['warm region', 'tropical region', 'anywhere'] and len(destination) < 3):
+            # Only require destination if it's not a flexible one
+            if destination not in ['warm region', 'tropical region', 'anywhere']:
+                missing.append('destination')
+                return missing  # Return immediately - max 1 question
+        
         if not context.get('budget'):
             missing.append('budget')
+            return missing  # Return immediately - max 1 question
         
         return missing
 

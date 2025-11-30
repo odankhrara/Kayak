@@ -1,6 +1,6 @@
 """Bundle Pydantic schemas for request/response"""
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 
 
@@ -74,6 +74,11 @@ class BundleResponse(BaseModel):
     hotels: List[HotelDealResponse] = Field(default_factory=list)
     cars: List[CarDealResponse] = Field(default_factory=list)
     created_at: datetime
+    # Enhanced fields
+    fit_score: Optional[float] = Field(None, description="Fit score (0-100) based on price, amenities, location")
+    fit_breakdown: Optional[Dict[str, float]] = Field(None, description="Breakdown of fit score components")
+    why_this_pick: Optional[str] = Field(None, description="Why this bundle works (≤25 words)")
+    what_to_watch: Optional[str] = Field(None, description="What to watch alert (≤12 words): refund cutoff, limited rooms, etc.")
 
     class Config:
         from_attributes = True

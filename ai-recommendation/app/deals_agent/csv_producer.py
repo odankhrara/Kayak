@@ -38,7 +38,7 @@ async def produce_from_csv(csv_path: Path = CSV_PATH, row_limit: int = ROW_LIMIT
             reader = csv.DictReader(f)
             for row in reader:
                 payload = build_payload(row)
-                await producer.send_and_wait(KAFKA_TOPIC, value=payload)
+                await producer.send(KAFKA_TOPIC, value=payload)
                 sent += 1
                 if sent >= row_limit:
                     break

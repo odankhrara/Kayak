@@ -19,10 +19,11 @@ class NLUParser:
     """Parses natural language trip requests into structured data"""
     
     # Common airport codes (3-letter IATA codes)
+    # Will be enhanced with Global Airports dataset if available
     AIRPORT_CODES = {
         'sfo', 'lax', 'jfk', 'lga', 'ewr', 'ord', 'dfw', 'atl', 'den', 'sea',
-        'las', 'mco', 'phx', 'mia', 'iad', 'bwi', 'sju', 'bna', 'msy', 'iad',
-        'iad', 'bwi', 'sju', 'bna', 'msy', 'iad', 'bwi', 'sju', 'bna', 'msy'
+        'las', 'mco', 'phx', 'mia', 'iad', 'bwi', 'sju', 'bna', 'msy',
+        'bos', 'iad', 'dtw', 'msp', 'slt', 'clt', 'iah', 'mci', 'pdx', 'san'
     }
     
     # Common city names
@@ -71,10 +72,22 @@ class NLUParser:
         """
         message_lower = message.lower()
         
+        origin = self._extract_origin(message_lower)
+        destination = self._extract_destination(message_lower)
+        city = self._extract_city(message_lower)
+        
+        # Clean up destination - remove "from" if it was accidentally captured
+        if destination:
+            dest_lower = destination.lower()
+            if 'from' in dest_lower:
+                # Split at "from" and take the first part
+                destination = dest_lower.split('from')[0].strip().title()
+                city = destination if not city else city
+        
         result = {
-            'origin': self._extract_origin(message_lower),
-            'destination': self._extract_destination(message_lower),
-            'city': self._extract_city(message_lower),
+            'origin': origin,
+            'destination': destination,
+            'city': city or destination,
             'dates': self._extract_dates(message, message_lower),
             'budget': self._extract_budget(message_lower),
             'travelers': self._extract_travelers(message_lower),
@@ -94,13 +107,17 @@ class NLUParser:
             return match.group(1).upper()
         
         # Look for "from [city]" or "departure from [city]"
-        from_pattern = r'(?:from|departure from|leaving from|depart from|departing from)\s+([a-z]+(?:\s+[a-z]+)?)'
+        # Improved pattern to handle "go to Miami from SFO" correctly
+        from_pattern = r'(?:from|departure from|leaving from|depart from|departing from)\s+([A-Z]{3}|[a-z]+(?:\s+[a-z]+)?)'
         match = re.search(from_pattern, text, re.IGNORECASE)
         if match:
             city = match.group(1).strip()
-            # Check if it's a known airport code
+            # Check if it's a known airport code (3 uppercase letters)
             if len(city) == 3 and city.upper() in [c.upper() for c in self.AIRPORT_CODES]:
                 return city.upper()
+            # Check if it's a known city name
+            if city.title() in [c.title() for c in self.MAJOR_CITIES]:
+                return city.title()
             return city.title()
         
         # Look for standalone airport codes
@@ -127,16 +144,34 @@ class NLUParser:
         """Extract destination city or region"""
         text_lower = text.lower()
         
-        # Look for "to [destination]" or "in [destination]" - improved pattern
-        # Handle "travel to miami", "going to miami", "in miami", etc.
+        # First, check for flexible destinations (before city extraction)
+        if 'anywhere warm' in text_lower or ('anywhere' in text_lower and 'warm' in text_lower):
+            return 'warm region'
+        if 'warm destination' in text_lower:
+            return 'warm region'
+        if 'anywhere' in text_lower and ('beach' in text_lower or 'tropical' in text_lower):
+            return 'tropical region'
+        if 'anywhere' in text_lower:
+            return 'anywhere'  # Flexible destination
+        
+        # Split text at "from" to separate destination and origin
+        # This prevents "miami from sfo" from being captured as destination
+        if ' from ' in text_lower:
+            # Get the part before "from" - this should contain the destination
+            before_from = text_lower.split(' from ')[0]
+            text_to_search = before_from
+        else:
+            text_to_search = text_lower
+        
+        # Look for "to [destination]" or "in [destination]" in the part before "from"
         to_patterns = [
-            r'(?:travel to|traveling to|travelling to|going to|want to go to|visit|going|trip to)\s+([a-z]+(?:\s+[a-z]+)?)',
-            r'\bto\s+([a-z]+(?:\s+[a-z]+)?)(?:\s|$|,|\.)',
-            r'\bin\s+([a-z]+(?:\s+[a-z]+)?)(?:\s|$|,|\.)',
+            r'(?:travel to|traveling to|travelling to|going to|want to go to|visit|trip to)\s+([a-z]+(?:\s+[a-z]+)?)',
+            r'\bto\s+([a-z]+(?:\s+[a-z]+)?)',
+            r'\bin\s+([a-z]+(?:\s+[a-z]+)?)',
         ]
         
         for pattern in to_patterns:
-            match = re.search(pattern, text_lower)
+            match = re.search(pattern, text_to_search)
             if match:
                 dest = match.group(1).strip()
                 # Remove common words that shouldn't be destinations
@@ -149,10 +184,15 @@ class NLUParser:
                     return dest.title()
         
         # Look for "anywhere warm" or similar region descriptions
-        if 'anywhere warm' in text_lower or 'warm destination' in text_lower:
+        # Check for "anywhere warm" first (more specific)
+        if 'anywhere warm' in text_lower or ('anywhere' in text_lower and 'warm' in text_lower):
+            return 'warm region'
+        if 'warm destination' in text_lower:
             return 'warm region'
         if 'anywhere' in text_lower and ('beach' in text_lower or 'tropical' in text_lower):
             return 'tropical region'
+        if 'anywhere' in text_lower:
+            return 'anywhere'  # Flexible destination
         
         # Check if message is just a city name (standalone)
         text_clean = text.strip()

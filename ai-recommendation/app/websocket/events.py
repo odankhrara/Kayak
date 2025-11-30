@@ -5,8 +5,11 @@ from app.db.session import get_session
 from app.models import Watch
 from app.schemas import WatchNotification
 from app.services.deal_selector import DealSelector
+from app.kafka.consumer import KafkaConsumerClient
 from typing import Dict, Set
 import json
+import os
+import asyncio
 from datetime import datetime
 
 router = APIRouter()
@@ -52,8 +55,43 @@ manager = ConnectionManager()
 
 @router.websocket("/events/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int):
-    """WebSocket endpoint for real-time deal notifications"""
+    """
+    WebSocket endpoint for real-time deal/watch notifications
+    
+    Relays events from:
+    - deal.events Kafka topic (new deals)
+    - Watch matches (price/inventory thresholds)
+    """
     await manager.connect(websocket, user_id)
+    
+    # Start Kafka consumer for deal.events in background
+    events_topic = os.getenv("KAFKA_TOPIC_EVENTS", "deal.events")
+    consumer = KafkaConsumerClient(
+        topics=[events_topic],
+        group_id=f"websocket-events-{user_id}"
+    )
+    
+    async def relay_deal_events():
+        """Relay deal events from Kafka to WebSocket"""
+        try:
+            await consumer.start()
+            async for message in consumer.consumer:
+                if not consumer.running:
+                    break
+                event = message.value
+                # Relay to WebSocket
+                await manager.send_personal_message({
+                    "type": "deal_event",
+                    "event": event,
+                    "timestamp": datetime.utcnow().isoformat()
+                }, user_id)
+        except Exception as e:
+            print(f"[WebSocket] Error relaying deal events: {e}")
+        finally:
+            await consumer.stop()
+    
+    # Start event relay task
+    relay_task = asyncio.create_task(relay_deal_events())
     
     try:
         # Send welcome message
@@ -74,6 +112,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             })
     
     except WebSocketDisconnect:
+        relay_task.cancel()
         manager.disconnect(websocket, user_id)
 
 

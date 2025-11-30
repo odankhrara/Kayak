@@ -59,6 +59,33 @@ async def get_bundles(
             if hotel:
                 hotels.append(HotelDealResponse.model_validate(hotel))
         
+        # Compute fit score and generate explanations (lightweight, cached if possible)
+        from app.services.bundle_fit_scorer import BundleFitScorer
+        from app.services.bundle_summarizer import BundleSummarizer
+        
+        # Convert Pydantic models back to SQLModel for processing
+        flight_models = [session.get(FlightDeal, f.id) for f in flights]
+        hotel_models = [session.get(HotelDeal, h.id) for h in hotels]
+        flight_models = [f for f in flight_models if f]
+        hotel_models = [h for h in hotel_models if h]
+        
+        fit_scorer = BundleFitScorer(session)
+        summarizer = BundleSummarizer(session)
+        
+        # Get user preferences from query params (if any)
+        user_preferences = params.tags if params.tags else None
+        
+        # Compute fit score (lightweight operation)
+        fit_result = fit_scorer.compute_fit_score(
+            bundle, flight_models, hotel_models,
+            user_budget=params.max_price,
+            user_preferences=user_preferences
+        )
+        
+        # Generate summary with explanations (lightweight)
+        summary = summarizer.generate_bundle_summary(bundle, flight_models, hotel_models)
+        what_to_watch = summarizer.generate_what_to_watch(bundle, flight_models, hotel_models)
+        
         bundle_response = BundleResponse(
             id=bundle.id,
             name=bundle.name,
@@ -69,7 +96,11 @@ async def get_bundles(
             flights=flights,
             hotels=hotels,
             cars=[],  # Car deals not yet implemented
-            created_at=bundle.created_at
+            created_at=bundle.created_at,
+            fit_score=fit_result["fit_score"],
+            fit_breakdown=fit_result["breakdown"],
+            why_this_pick=summary.get("why_this_pick", ""),
+            what_to_watch=what_to_watch
         )
         result.append(bundle_response)
     
@@ -79,9 +110,10 @@ async def get_bundles(
 @router.get("/{bundle_id}", response_model=BundleResponse)
 async def get_bundle(
     bundle_id: int,
+    include_fit_score: bool = Query(True, description="Include fit score and explanations"),
     session: Session = Depends(get_session)
 ):
-    """Get bundle by ID"""
+    """Get bundle by ID with optional fit score and explanations"""
     bundle = session.get(Bundle, bundle_id)
     if not bundle:
         raise HTTPException(status_code=404, detail="Bundle not found")
@@ -95,7 +127,7 @@ async def get_bundle(
     hotels = [HotelDealResponse.model_validate(session.get(HotelDeal, hid))
               for hid in hotel_ids if session.get(HotelDeal, hid)]
     
-    return BundleResponse(
+    response = BundleResponse(
         id=bundle.id,
         name=bundle.name,
         description=bundle.description,
@@ -107,6 +139,30 @@ async def get_bundle(
         cars=[],
         created_at=bundle.created_at
     )
+    
+    # Add fit score and explanations if requested
+    if include_fit_score:
+        from app.services.bundle_fit_scorer import BundleFitScorer
+        from app.services.bundle_summarizer import BundleSummarizer
+        
+        flight_models = [session.get(FlightDeal, f.id) for f in flights]
+        hotel_models = [session.get(HotelDeal, h.id) for h in hotels]
+        flight_models = [f for f in flight_models if f]
+        hotel_models = [h for h in hotel_models if h]
+        
+        fit_scorer = BundleFitScorer(session)
+        summarizer = BundleSummarizer(session)
+        
+        fit_result = fit_scorer.compute_fit_score(bundle, flight_models, hotel_models)
+        summary = summarizer.generate_bundle_summary(bundle, flight_models, hotel_models)
+        what_to_watch = summarizer.generate_what_to_watch(bundle, flight_models, hotel_models)
+        
+        response.fit_score = fit_result["fit_score"]
+        response.fit_breakdown = fit_result["breakdown"]
+        response.why_this_pick = summary.get("why_this_pick", "")
+        response.what_to_watch = what_to_watch
+    
+    return response
 
 
 @router.post("/query", response_model=List[BundleResponse])
@@ -171,6 +227,29 @@ async def query_bundles(
             if hotel:
                 hotels.append(HotelDealResponse.model_validate(hotel))
         
+        # Compute fit score and explanations (lightweight)
+        from app.services.bundle_fit_scorer import BundleFitScorer
+        from app.services.bundle_summarizer import BundleSummarizer
+        
+        flight_models = [session.get(FlightDeal, f.id) for f in flights]
+        hotel_models = [session.get(HotelDeal, h.id) for h in hotels]
+        flight_models = [f for f in flight_models if f]
+        hotel_models = [h for h in hotel_models if h]
+        
+        fit_scorer = BundleFitScorer(session)
+        summarizer = BundleSummarizer(session)
+        
+        user_preferences = body.get("preferences") if body else None
+        
+        fit_result = fit_scorer.compute_fit_score(
+            bundle, flight_models, hotel_models,
+            user_budget=search_params.max_price,
+            user_preferences=user_preferences
+        )
+        
+        summary = summarizer.generate_bundle_summary(bundle, flight_models, hotel_models)
+        what_to_watch = summarizer.generate_what_to_watch(bundle, flight_models, hotel_models)
+        
         bundle_response = BundleResponse(
             id=bundle.id,
             name=bundle.name,
@@ -181,7 +260,11 @@ async def query_bundles(
             flights=flights,
             hotels=hotels,
             cars=[],
-            created_at=bundle.created_at
+            created_at=bundle.created_at,
+            fit_score=fit_result["fit_score"],
+            fit_breakdown=fit_result["breakdown"],
+            why_this_pick=summary.get("why_this_pick", ""),
+            what_to_watch=what_to_watch
         )
         result.append(bundle_response)
     

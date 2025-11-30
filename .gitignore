@@ -1,2 +1,19 @@
 node_modules/
 src/logs/*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.db
+*.sqlite
+*.sqlite3
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
