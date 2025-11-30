@@ -5,6 +5,11 @@ from typing import List, Dict, Any
 from app.db.session import get_session
 from app.services.nlu_parser import NLUParser
 from app.services.concierge_agent import ConciergeAgent
+from app.services.policy_qa import PolicyQA
+from app.services.bundle_summarizer import BundleSummarizer
+from app.services.rate_comparator import RateComparator
+from app.services.quote_generator import QuoteGenerator
+from app.models import FlightDeal, HotelDeal, Bundle, Watch
 from app.schemas.chat_schemas import (
     ChatMessage,
     ChatResponse,
@@ -14,6 +19,7 @@ from app.schemas.chat_schemas import (
 from app.schemas import BundleSearchParams
 from app.services.chat_context import context_manager
 import json
+import re
 from datetime import datetime
 import uuid
 
@@ -40,9 +46,161 @@ async def chat_message(
     try:
         # Get or create session ID
         session_id = chat_message.session_id or str(uuid.uuid4())
+        user_id = chat_message.user_id or 1
+        message = chat_message.message
+        message_lower = message.lower()
+        
+        # Get context
+        context = context_manager.get_context(session_id)
+        
+        # Handle simple follow-up responses
+        if message_lower in ['yes', 'yep', 'yeah', 'ok', 'okay', 'sure']:
+            # Check if we were asking for clarification
+            if context.get('awaiting_clarification'):
+                # User is confirming they want to provide details
+                return ChatResponse(
+                    message="Great! Please provide the details I need. For example: 'I want to go to Miami from SFO, budget $1000 for 2 people, dates Oct 25-27'",
+                    requires_clarification=True,
+                    clarification_questions=["Where are you departing from?", "Where would you like to go?", "What's your budget?"]
+                )
+            # Check if we were asking about watch creation
+            if context.get('awaiting_watch_confirmation'):
+                # Create watch with stored parameters
+                bundle_id = context.get('watch_bundle_id')
+                price_threshold = context.get('watch_price_threshold')
+                inventory_threshold = context.get('watch_inventory_threshold')
+                
+                if bundle_id:
+                    bundle = session.get(Bundle, bundle_id)
+                    if bundle:
+                        watch = Watch(
+                            user_id=user_id,
+                            bundle_id=bundle_id,
+                            max_price=price_threshold or bundle.total_price * 0.9,
+                            min_inventory=inventory_threshold or 5,
+                            active=True
+                        )
+                        session.add(watch)
+                        session.commit()
+                        session.refresh(watch)
+                        
+                        # Clear context flags
+                        context.pop('awaiting_watch_confirmation', None)
+                        context.pop('watch_bundle_id', None)
+                        context.pop('watch_price_threshold', None)
+                        context.pop('watch_inventory_threshold', None)
+                        
+                        response = f"✅ Watch created! I'll alert you if:\n"
+                        if price_threshold:
+                            response += f"  • Price drops below ${price_threshold:.2f}\n"
+                        if inventory_threshold:
+                            response += f"  • Inventory drops below {inventory_threshold} rooms\n"
+                        response += f"\nYou'll receive notifications via WebSocket when these conditions are met."
+                        
+                        return ChatResponse(message=response, bundles=None)
+        
+        # Check if this is a watch creation request
+        is_watch_request = any(word in message_lower for word in ['track', 'watch', 'alert', 'notify', 'monitor', 'keep an eye'])
+        if is_watch_request:
+            # Extract price and inventory thresholds
+            price_match = re.search(r'\$?(\d+)', message)
+            price_threshold = float(price_match.group(1)) if price_match else None
+            
+            inv_match = re.search(r'(\d+)\s*(?:rooms?|inventory)', message_lower)
+            inventory_threshold = int(inv_match.group(1)) if inv_match else None
+            
+            # Try to find bundle from context or message
+            bundle_id = context.get('last_bundle_id')
+            
+            # If no bundle in context, try to find by city name
+            if not bundle_id:
+                city_match = re.search(r'\b(miami|tokyo|new york|nyc|los angeles|la|chicago|san francisco|sf)\b', message_lower)
+                if city_match:
+                    city = city_match.group(1)
+                    # Search for bundles with this city
+                    from sqlmodel import select
+                    statement = select(Bundle).where(Bundle.is_active == True).limit(10)
+                    bundles = list(session.exec(statement).all())
+                    for b in bundles:
+                        if b.hotel_deal_ids:
+                            hotel_ids = [int(id) for id in b.hotel_deal_ids.split(",") if id]
+                            for hid in hotel_ids:
+                                hotel = session.get(HotelDeal, hid)
+                                if hotel and city.lower() in hotel.city.lower() if hotel.city else False:
+                                    bundle_id = b.id
+                                    break
+                        if bundle_id:
+                            break
+            
+            if bundle_id:
+                bundle = session.get(Bundle, bundle_id)
+                if bundle:
+                    watch = Watch(
+                        user_id=user_id,
+                        bundle_id=bundle_id,
+                        max_price=price_threshold or bundle.total_price * 0.9,
+                        min_inventory=inventory_threshold or 5,
+                        active=True
+                    )
+                    session.add(watch)
+                    session.commit()
+                    session.refresh(watch)
+                    
+                    response = f"✅ Watch created for {bundle.name}!\n"
+                    response += f"I'll alert you if:\n"
+                    if price_threshold:
+                        response += f"  • Price drops below ${price_threshold:.2f}\n"
+                    else:
+                        response += f"  • Price drops below ${bundle.total_price * 0.9:.2f} (10% off)\n"
+                    if inventory_threshold:
+                        response += f"  • Inventory drops below {inventory_threshold} rooms\n"
+                    else:
+                        response += f"  • Inventory drops below 5 rooms\n"
+                    response += f"\nYou'll receive notifications via WebSocket when these conditions are met."
+                    
+                    return ChatResponse(message=response, bundles=None)
+            else:
+                # No bundle found, ask user to select one first
+                context['awaiting_watch_confirmation'] = True
+                context['watch_price_threshold'] = price_threshold
+                context['watch_inventory_threshold'] = inventory_threshold
+                return ChatResponse(
+                    message="I need to know which package to track. Please search for bundles first, then I can set up a watch. For example: 'I want to go to Miami from SFO, budget $1000'",
+                    requires_clarification=True
+                )
+        
+        # Check if this is a policy/logistics question
+        policy_qa = PolicyQA(session)
+        is_policy_question = any(
+            keyword in message_lower 
+            for keywords in policy_qa.POLICY_KEYWORDS.values() 
+            for keyword in keywords
+        ) or (any(
+            q_word in message_lower 
+            for q_word in ['what', 'how', 'when', 'where', 'why', 'is', 'does', 'can', 'do']
+        ) and not is_watch_request)
+        
+        # If it's a policy question, answer it directly
+        if is_policy_question:
+            # Try to get bundle/flight/hotel from context
+            context = context_manager.get_context(session_id)
+            bundle_id = context.get('last_bundle_id') if context else None
+            
+            answer = policy_qa.answer_question(
+                chat_message.message,
+                bundle_id=bundle_id
+            )
+            
+            return ChatResponse(
+                message=answer["answer"],
+                parsed_request=None,
+                bundles=None,
+                requires_clarification=False,
+                clarification_questions=[]
+            )
         
         # Parse the natural language message
-        parsed = nlu_parser.parse(chat_message.message)
+        parsed = nlu_parser.parse(message)
         parsed_request = ParsedTripRequest(**parsed)
         
         # Merge with existing context
@@ -51,6 +209,12 @@ async def chat_message(
         # Check what we have and what's missing
         missing_fields = context_manager.get_missing_fields(session_id)
         context = context_manager.get_context(session_id)
+        
+        # Mark if we're awaiting clarification
+        if missing_fields:
+            context['awaiting_clarification'] = True
+        else:
+            context.pop('awaiting_clarification', None)
         
         requires_clarification = len(missing_fields) > 0
         clarification_questions = []
@@ -74,16 +238,25 @@ async def chat_message(
             # Create concierge agent and get recommendations
             concierge = ConciergeAgent(session)
             
+            # Clean up destination - remove "from" if accidentally captured
+            destination = search_request.destination
+            if destination and 'from' in destination.lower():
+                destination = destination.lower().split('from')[0].strip().title()
+            
+            city = search_request.city
+            if city and 'from' in city.lower():
+                city = city.lower().split('from')[0].strip().title()
+            
             # Convert merged request to search params
             search_params = BundleSearchParams(
                 origin=search_request.origin,
-                destination=search_request.destination,
-                city=search_request.city,
+                destination=destination,
+                city=city or destination,
                 max_price=search_request.budget,
                 tags=search_request.constraints if search_request.constraints else None
             )
             
-            # Get bundles
+            # Get bundles (this will create them if deals exist)
             bundle_list = concierge.recommend_bundles(search_params, limit=3)
             
             # Format bundles for response
@@ -98,14 +271,58 @@ async def chat_message(
                     "tags": bundle.tags.split(",") if bundle.tags else []
                 })
             
-            # Generate response message
+            # Generate response message with tradeoff explanations
             if bundles:
                 response_message = f"I found {len(bundles)} great deals for you! "
                 response_message += f"Here are bundles starting at ${min(b['total_price'] for b in bundles):.2f}. "
-                response_message += "Would you like to see more details about any of these?"
+                
+                # Add tradeoff explanation for the first bundle
+                if bundles:
+                    first_bundle = bundle_list[0]
+                    # Get flights and hotels for explanation
+                    flight_ids = [int(id) for id in first_bundle.flight_deal_ids.split(",") if id] if first_bundle.flight_deal_ids else []
+                    hotel_ids = [int(id) for id in first_bundle.hotel_deal_ids.split(",") if id] if first_bundle.hotel_deal_ids else []
+                    
+                    bundle_flights = [session.get(FlightDeal, fid) for fid in flight_ids if fid]
+                    bundle_hotels = [session.get(HotelDeal, hid) for hid in hotel_ids if hid]
+                    bundle_flights = [f for f in bundle_flights if f]
+                    bundle_hotels = [h for h in bundle_hotels if h]
+                    
+                    concierge = ConciergeAgent(session)
+                    explanation = concierge.explain_tradeoffs(
+                        first_bundle, bundle_flights, bundle_hotels, bundle_list[:3]
+                    )
+                    
+                    response_message += f"\n\n**Why I recommend this bundle:**\n{explanation}"
+                    
+                    # Store bundle ID in context for policy questions
+                    context_manager.get_context(session_id)['last_bundle_id'] = first_bundle.id
+                
+                response_message += "\n\nWould you like to see more details, ask about policies (refunds, pets, breakfast, etc.), or set up a price watch?"
             else:
-                response_message = "I couldn't find any bundles matching your criteria. "
-                response_message += "Would you like to adjust your search?"
+                # No bundles found - provide helpful guidance
+                response_message = "I couldn't find any bundles matching your criteria right now. "
+                
+                # Check if we have partial information
+                if search_request.origin or search_request.destination or search_request.city:
+                    response_message += f"\n\nI have: "
+                    info_parts = []
+                    if search_request.origin:
+                        info_parts.append(f"origin: {search_request.origin}")
+                    if search_request.destination or search_request.city:
+                        dest = search_request.destination or search_request.city
+                        info_parts.append(f"destination: {dest}")
+                    if search_request.budget:
+                        info_parts.append(f"budget: ${search_request.budget:.0f}")
+                    response_message += ", ".join(info_parts)
+                    response_message += "\n\nWould you like to:\n"
+                    response_message += "1. Adjust your search criteria?\n"
+                    response_message += "2. Set up a watch to be notified when deals become available?\n"
+                    response_message += "3. Try a different destination or dates?"
+                else:
+                    response_message += "Please provide more details about your trip. For example:\n"
+                    response_message += "- 'I want to go to Miami from SFO, budget $1000 for 2 people, dates Oct 25-27'\n"
+                    response_message += "- 'Weekend trip to Tokyo under $900, pet-friendly'"
         else:
             # Need clarification - provide context-aware response
             response_message = ""
@@ -214,8 +431,25 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
                     
                     if bundles:
                         response_message = f"Found {len(bundles)} great deals! Starting at ${min(b['total_price'] for b in bundles):.2f}."
+                        
+                        # Add explanation for first bundle
+                        if bundle_list:
+                            first_bundle = bundle_list[0]
+                            flight_ids = [int(id) for id in first_bundle.flight_deal_ids.split(",") if id] if first_bundle.flight_deal_ids else []
+                            hotel_ids = [int(id) for id in first_bundle.hotel_deal_ids.split(",") if id] if first_bundle.hotel_deal_ids else []
+                            
+                            bundle_flights = [session.get(FlightDeal, fid) for fid in flight_ids if fid]
+                            bundle_hotels = [session.get(HotelDeal, hid) for hid in hotel_ids if hid]
+                            bundle_flights = [f for f in bundle_flights if f]
+                            bundle_hotels = [h for h in bundle_hotels if h]
+                            
+                            concierge = ConciergeAgent(session)
+                            explanation = concierge.explain_tradeoffs(
+                                first_bundle, bundle_flights, bundle_hotels, bundle_list[:3]
+                            )
+                            response_message += f"\n\n**Why I recommend this:**\n{explanation}"
                     else:
-                        response_message = "I couldn't find matching deals. Could you provide more details?"
+                        response_message = "I couldn't find matching deals. Would you like me to set up a watch to notify you when deals become available?"
                 else:
                     # Need clarification - provide context-aware response
                     known_info = []

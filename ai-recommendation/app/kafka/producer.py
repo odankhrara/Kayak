@@ -1,5 +1,11 @@
 """Kafka producers for AI recommendation service"""
-from kafka import KafkaProducer
+try:
+    from kafka import KafkaProducer
+    KAFKA_AVAILABLE = True
+except ImportError:
+    KAFKA_AVAILABLE = False
+    KafkaProducer = None
+
 from aiokafka import AIOKafkaProducer
 import json
 import os
@@ -11,11 +17,15 @@ class KafkaProducerClient:
     
     def __init__(self):
         self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092,localhost:9092")
-        self.producer = KafkaProducer(
-            bootstrap_servers=self._format_bootstrap(self.bootstrap_servers),
-            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-            key_serializer=lambda k: k.encode('utf-8') if k else None,
-        )
+        if KAFKA_AVAILABLE and KafkaProducer:
+            self.producer = KafkaProducer(
+                bootstrap_servers=self._format_bootstrap(self.bootstrap_servers),
+                value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+                key_serializer=lambda k: k.encode('utf-8') if k else None,
+            )
+        else:
+            self.producer = None
+            print("⚠️  kafka-python not available, using aiokafka only")
 
     @staticmethod
     def _format_bootstrap(bootstrap: str) -> List[str]:
@@ -23,6 +33,9 @@ class KafkaProducerClient:
     
     def send_message(self, topic: str, message: Dict[Any, Any], key: str = None):
         """Send message to Kafka topic"""
+        if not self.producer:
+            print("⚠️  Kafka producer not available")
+            return False
         try:
             future = self.producer.send(topic, value=message, key=key)
             future.get(timeout=10)
@@ -33,7 +46,8 @@ class KafkaProducerClient:
     
     def close(self):
         """Close producer"""
-        self.producer.close()
+        if self.producer:
+            self.producer.close()
 
 
 # Global producer instance

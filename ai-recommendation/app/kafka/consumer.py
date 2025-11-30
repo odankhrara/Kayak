@@ -46,6 +46,12 @@ class KafkaConsumerClient:
         finally:
             await self.stop()
     
+    async def start_consumer(self):
+        """Start consumer and return it for manual iteration"""
+        if not self.consumer:
+            await self.start()
+        return self.consumer
+    
     async def stop(self):
         """Stop consumer"""
         self.running = False

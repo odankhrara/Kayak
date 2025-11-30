@@ -74,6 +74,18 @@ class DatasetLoader:
     async def load_flight_price_dataset(self, file_path: str):
         """Load Flight Price Prediction dataset"""
         await self.load_and_publish_dataset(file_path, "flight_price")
+    
+    async def load_flightprices_dataset(self, file_path: str):
+        """Load Flight Prices dataset (dilwong/flightprices)"""
+        await self.load_and_publish_dataset(file_path, "flightprices")
+    
+    async def load_expedia_hotel_dataset(self, file_path: str):
+        """Load Expedia Hotel Recommendations dataset"""
+        await self.load_and_publish_dataset(file_path, "expedia_hotel")
+    
+    async def load_airlines_routes_dataset(self, file_path: str):
+        """Load Airlines, Airport and Routes dataset"""
+        await self.load_and_publish_dataset(file_path, "airlines_routes")
 
 
 async def main():

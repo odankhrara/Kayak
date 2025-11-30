@@ -13,6 +13,8 @@ class WatchBase(SQLModel):
     check_in: Optional[datetime] = None
     check_out: Optional[datetime] = None
     watch_type: str = Field(default="flight", description="flight, hotel, or car")
+    bundle_id: Optional[int] = Field(default=None, description="Watch a specific bundle")
+    min_inventory: Optional[int] = Field(default=None, description="Alert if inventory drops below this")
     active: bool = Field(default=True)
     notification_sent: bool = Field(default=False)
 
