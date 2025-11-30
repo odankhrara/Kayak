@@ -1,0 +1,16 @@
+
+> @kayak/listing-service@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/index.ts
+
+[INFO] 15:08:34 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+Listing Service running on port 8002
+🔄 Redis connecting...
+✅ Redis connected and ready
+❌ Cache MISS: flights:search:{"origin":"JFK","destination":"SFO","departureDate":"2025-11-30","passengers":1,"class":"economy","sortBy":"price","sortOrder":"ASC","limit":50}
+[DEBUG] Flight search query: SELECT * FROM flights WHERE status = 'scheduled' AND available_seats > 0 AND departure_airport = ? AND arrival_airport = ? AND DATE(departure_datetime) = ? AND available_seats >= ? AND flight_class = ? ORDER BY price_per_ticket ASC LIMIT 50
+[DEBUG] Flight search params: [ 'JFK', 'SFO', '2025-11-30', 1, 'economy' ]
+Flight search error: Table 'kayak.flights' doesn't exist
+❌ Cache MISS: flights:search:{"origin":"JFK","destination":"SFO","departureDate":"2025-11-30","passengers":1,"class":"economy","sortBy":"price","sortOrder":"ASC","limit":50}
+[DEBUG] Flight search query: SELECT * FROM flights WHERE status = 'scheduled' AND available_seats > 0 AND departure_airport = ? AND arrival_airport = ? AND DATE(departure_datetime) = ? AND available_seats >= ? AND flight_class = ? ORDER BY price_per_ticket ASC LIMIT 50
+[DEBUG] Flight search params: [ 'JFK', 'SFO', '2025-11-30', 1, 'economy' ]
+Flight search error: Table 'kayak.flights' doesn't exist
