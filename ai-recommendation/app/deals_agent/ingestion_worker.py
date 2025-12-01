@@ -46,9 +46,16 @@ class IngestionWorker:
         try:
             # Get historical price data (30-day average)
             listing_id = flight_data.get("flight_number", "")
+            route_key = f"{flight_data.get('origin', '')}-{flight_data.get('destination', '')}"
             historical_data = PriceHistoryTracker.get_historical_data(
                 session, "flight", listing_id
             )
+            
+            # If no historical data, try to get by route
+            if not historical_data or not historical_data.get('avg_30d_price'):
+                historical_data = PriceHistoryTracker.get_historical_data(
+                    session, "flight", route_key
+                )
             
             # Detect deal with historical context
             deal_info = DealDetector.detect_flight_deal(flight_data, historical_data)

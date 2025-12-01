@@ -37,58 +37,107 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Airport mapper not loaded: {e}")
     
-    try:
-        from app.data.dataset_fetcher import DatasetFetcher
-        fetcher = DatasetFetcher()
-        missing = fetcher.get_missing_datasets()
-        if missing:
-            print(f"📥 Missing datasets detected: {', '.join(missing)}")
-            fetch_task = asyncio.create_task(fetcher.fetch_all_missing_datasets())
-            background_tasks.append(fetch_task)
-        else:
-            available = fetcher.get_available_datasets()
-            print(f"✅ All datasets available: {', '.join(available)}")
-    except Exception as e:
-        print(f"⚠️  Dataset fetcher not available: {e}")
+    # Initialize CSV data indexer (if datasets exist) - run in background to not block startup
+    async def init_csv_indexer():
+        try:
+            from app.services.csv_data_indexer import CSVDataIndexer
+            from pathlib import Path
+            import os
+            
+            data_dir = os.getenv("DATASETS_DIR", "./data/raw")
+            csv_files = list(Path(data_dir).glob("*.csv"))
+            
+            if csv_files:
+                print(f"📊 Found {len(csv_files)} CSV files, checking indexer...")
+                index_db_path = os.getenv("CSV_INDEX_DB", "./csv_index.db")
+                if Path(index_db_path).exists():
+                    print("✅ CSV index database exists")
+                else:
+                    print("ℹ️  CSV index not found. Run: python scripts/index_all_datasets.py")
+            else:
+                print("ℹ️  No CSV files found in data/raw")
+        except Exception as e:
+            print(f"⚠️  CSV indexer check failed: {e}")
+    
+    # Run CSV indexer check in background (non-blocking)
+    csv_task = asyncio.create_task(init_csv_indexer())
+    background_tasks.append(csv_task)
+    
+    # Check datasets in background (non-blocking)
+    async def check_datasets():
+        try:
+            from app.data.dataset_fetcher import DatasetFetcher
+            fetcher = DatasetFetcher()
+            missing = fetcher.get_missing_datasets()
+            if missing:
+                print(f"📥 Missing datasets detected: {', '.join(missing)}")
+                # Don't auto-fetch on startup, just notify
+            else:
+                available = fetcher.get_available_datasets()
+                print(f"✅ All datasets available: {', '.join(available)}")
+        except Exception as e:
+            print(f"⚠️  Dataset fetcher not available: {e}")
+    
+    dataset_task = asyncio.create_task(check_datasets())
+    background_tasks.append(dataset_task)
     
     print("AI Recommendation Service started")
     
     global ingestion_worker, deal_scanner, feed_scheduler
     global normalization_worker, deal_detector_worker, offer_tagger_worker, event_emitter
     
-    feed_scheduler = FeedIngestionScheduler(ingestion_interval_minutes=30)
-    feed_task = asyncio.create_task(feed_scheduler.start_periodic_ingestion())
-    background_tasks.append(feed_task)
-    print("✅ Feed ingestion scheduler started")
+    # Start workers in background (non-blocking) - create tasks without awaiting
+    try:
+        feed_scheduler = FeedIngestionScheduler(ingestion_interval_minutes=30)
+        feed_task = asyncio.create_task(feed_scheduler.start_periodic_ingestion())
+        background_tasks.append(feed_task)
+        print("✅ Feed ingestion scheduler started")
+    except Exception as e:
+        print(f"⚠️  Feed scheduler not started: {e}")
     
-    normalization_worker = NormalizationWorker()
-    norm_task = asyncio.create_task(normalization_worker.start())
-    background_tasks.append(norm_task)
-    print("✅ Normalization worker started")
+    try:
+        normalization_worker = NormalizationWorker()
+        norm_task = asyncio.create_task(normalization_worker.start())
+        background_tasks.append(norm_task)
+        print("✅ Normalization worker started")
+    except Exception as e:
+        print(f"⚠️  Normalization worker not started: {e}")
     
-    deal_detector_worker = DealDetectorWorker()
-    detector_task = asyncio.create_task(deal_detector_worker.start())
-    background_tasks.append(detector_task)
-    print("✅ Deal detector worker started")
+    try:
+        deal_detector_worker = DealDetectorWorker()
+        detector_task = asyncio.create_task(deal_detector_worker.start())
+        background_tasks.append(detector_task)
+        print("✅ Deal detector worker started")
+    except Exception as e:
+        print(f"⚠️  Deal detector worker not started: {e}")
     
-    offer_tagger_worker = OfferTaggerWorker()
-    tagger_task = asyncio.create_task(offer_tagger_worker.start())
-    background_tasks.append(tagger_task)
-    print("✅ Offer tagger worker started")
+    try:
+        offer_tagger_worker = OfferTaggerWorker()
+        tagger_task = asyncio.create_task(offer_tagger_worker.start())
+        background_tasks.append(tagger_task)
+        print("✅ Offer tagger worker started")
+    except Exception as e:
+        print(f"⚠️  Offer tagger worker not started: {e}")
     
-    event_emitter = EventEmitter()
-    emitter_task = asyncio.create_task(event_emitter.start())
-    background_tasks.append(emitter_task)
-    print("✅ Event emitter started")
+    try:
+        event_emitter = EventEmitter()
+        emitter_task = asyncio.create_task(event_emitter.start())
+        background_tasks.append(emitter_task)
+        print("✅ Event emitter started")
+    except Exception as e:
+        print(f"⚠️  Event emitter not started: {e}")
     
-    deal_scanner = DealScanner()
-    scanner_task = asyncio.create_task(deal_scanner.start_periodic_scans())
-    background_tasks.append(scanner_task)
-    
-    from app.api.health import set_scanner
-    set_scanner(deal_scanner)
-    
-    print("✅ Deal scanner started")
+    try:
+        deal_scanner = DealScanner()
+        scanner_task = asyncio.create_task(deal_scanner.start_periodic_scans())
+        background_tasks.append(scanner_task)
+        
+        from app.api.health import set_scanner
+        set_scanner(deal_scanner)
+        
+        print("✅ Deal scanner started")
+    except Exception as e:
+        print(f"⚠️  Deal scanner not started: {e}")
     
     yield
     

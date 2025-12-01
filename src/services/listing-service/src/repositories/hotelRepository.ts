@@ -33,11 +33,41 @@ export class HotelRepository {
     `
     const params: any[] = []
 
-    // City/State filters
+    // City filter - use LIKE for partial matching and case-insensitive
+    // Also handle common city aliases (e.g., "New York" -> "NYC")
     if (filters.city) {
-      query += ' AND h.city = ?'
-      params.push(filters.city)
+      const cityLower = filters.city.toLowerCase().trim()
+      
+      // City alias mapping for common cases
+      const cityAliases: { [key: string]: string[] } = {
+        'new york': ['nyc', 'new york', 'newyork'],
+        'los angeles': ['la', 'los angeles'],
+        'san francisco': ['sf', 'san francisco'],
+        'mumbai': ['bombay', 'mumbai'],
+        'delhi': ['new delhi', 'delhi']
+      }
+      
+      // Get aliases for the search city
+      let searchTerms = [cityLower]
+      for (const [key, aliases] of Object.entries(cityAliases)) {
+        if (cityLower.includes(key) || aliases.some(a => cityLower.includes(a))) {
+          searchTerms = [...new Set([...searchTerms, ...aliases])]
+          break
+        }
+      }
+      
+      // Build OR conditions for all search terms
+      const conditions: string[] = []
+      for (const term of searchTerms) {
+        conditions.push('(LOWER(h.city) LIKE LOWER(?) OR LOWER(h.city) LIKE LOWER(?) OR LOWER(h.city) LIKE LOWER(?))')
+        params.push(`%${term}%`)  // Contains
+        params.push(`${term}%`)    // Starts with
+        params.push(`%${term}`)    // Ends with
+      }
+      
+      query += ` AND (${conditions.join(' OR ')})`
     }
+    // State filter is optional - removed from required filters
     if (filters.state) {
       query += ' AND h.state = ?'
       params.push(filters.state)

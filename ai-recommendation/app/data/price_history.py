@@ -145,7 +145,8 @@ class PriceHistoryTracker:
         )
         
         return {
-            "avg_price_30d": avg_30d,
+            "avg_30d_price": avg_30d,  # Per specification: avg_30d_price
+            "avg_price_30d": avg_30d,  # Keep for backward compatibility
             "avg_price_60d": avg_60d,
             "listing_type": listing_type,
             "listing_id": listing_id

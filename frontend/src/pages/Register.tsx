@@ -22,11 +22,35 @@ const Register = () => {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
     trigger,
   } = useForm<RegisterData>();
 
   const password = watch('password');
+
+  // Format SSN as user types (XXX-XX-XXXX)
+  const formatSSNInput = (value: string): string => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+    
+    // Limit to 9 digits
+    const limited = digits.slice(0, 9);
+    
+    // Apply formatting
+    if (limited.length <= 3) {
+      return limited;
+    } else if (limited.length <= 5) {
+      return `${limited.slice(0, 3)}-${limited.slice(3)}`;
+    } else {
+      return `${limited.slice(0, 3)}-${limited.slice(3, 5)}-${limited.slice(5, 9)}`;
+    }
+  };
+
+  const handleSSNChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatSSNInput(e.target.value);
+    setValue('userId', formatted, { shouldValidate: true });
+  };
 
   const onSubmit = async (data: RegisterData) => {
     setIsLoading(true);
@@ -128,9 +152,13 @@ const Register = () => {
                     placeholder="123-45-6789"
                     icon={<CreditCard className="w-5 h-5" />}
                     error={errors.userId?.message}
+                    maxLength={11}
                     {...register('userId', {
                       required: 'SSN is required',
                       validate: (value) => validateSSN(value) || 'Invalid SSN format (XXX-XX-XXXX)',
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                        handleSSNChange(e);
+                      },
                     })}
                   />
                   <div className="grid grid-cols-2 gap-4">

@@ -31,6 +31,10 @@ class DealDetectorWorker:
             
             historical_data = PriceHistoryTracker.get_historical_data(session, record_type, listing_id)
             
+            # Ensure avg_30d_price is in historical_data (per specification)
+            if historical_data and historical_data.get("avg_price_30d") and not historical_data.get("avg_30d_price"):
+                historical_data["avg_30d_price"] = historical_data["avg_price_30d"]
+            
             if record_type == "flight":
                 deal_info = self.detector.detect_flight_deal(normalized_record, historical_data)
             elif record_type == "hotel":

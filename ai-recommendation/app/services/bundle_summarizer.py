@@ -155,7 +155,16 @@ class BundleSummarizer:
         if hotels:
             hotel = hotels[0]
             try:
-                avg_price = price_tracker.calculate_average("hotel", hotel.city, days=30)
+                # Get 30-day average price
+                avg_price = price_tracker.calculate_30_day_average(
+                    self.session, "hotel", hotel.name
+                )
+                if not avg_price:
+                    # Try by city
+                    avg_price = price_tracker.calculate_30_day_average(
+                        self.session, "hotel", hotel.city
+                    )
+                
                 if avg_price and hotel.discounted_price_per_night:
                     price_diff_pct = ((avg_price - hotel.discounted_price_per_night) / avg_price) * 100
                     if price_diff_pct >= 15:
@@ -203,9 +212,10 @@ class BundleSummarizer:
         if not explanation:
             explanation = "Best value match"
         
+        # Enforce ≤25 words limit (per specification)
         words = explanation.split()
         if len(words) > 25:
-            explanation = " ".join(words[:25]) + "..."
+            explanation = " ".join(words[:25])
         return explanation
     
     def generate_what_to_watch(
@@ -251,14 +261,15 @@ class BundleSummarizer:
                     watch_items.append("Non-refundable flight")
                     word_count += 2
         
-        # Combine into ≤12 word alert
+        # Combine into ≤12 word alert (per specification)
         alert = " • ".join(watch_items[:3])  # Max 3 items
         if not alert:
             alert = "Monitor price and availability"
         
-        # Ensure ≤12 words
+        # Enforce ≤12 words limit (per specification)
         words = alert.split()
         if len(words) > 12:
+            # Truncate to exactly 12 words
             alert = " ".join(words[:12])
         
         return alert
