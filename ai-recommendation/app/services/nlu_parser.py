@@ -2,6 +2,7 @@
 import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+import os
 
 try:
     from dateutil import parser as date_parser
@@ -14,16 +15,28 @@ except ImportError:
         # Simple fallback - just return default
         return default or datetime.now()
 
+try:
+    from app.services.ollama_service import get_ollama_service
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
+    get_ollama_service = None
+
 
 class NLUParser:
-    """Parses natural language trip requests into structured data"""
+    """
+    Parses natural language trip requests into structured data
+    
+    Can use Ollama for intelligent parsing if available, otherwise falls back to rule-based parsing.
+    """
     
     # Common airport codes (3-letter IATA codes)
     # Will be enhanced with Global Airports dataset if available
     AIRPORT_CODES = {
         'sfo', 'lax', 'jfk', 'lga', 'ewr', 'ord', 'dfw', 'atl', 'den', 'sea',
         'las', 'mco', 'phx', 'mia', 'iad', 'bwi', 'sju', 'bna', 'msy',
-        'bos', 'iad', 'dtw', 'msp', 'slt', 'clt', 'iah', 'mci', 'pdx', 'san'
+        'bos', 'iad', 'dtw', 'msp', 'slt', 'clt', 'iah', 'mci', 'pdx', 'san',
+        'nrt', 'hnd', 'del', 'bom', 'cdg', 'lhr', 'lgw'
     }
     
     # Common city names
@@ -31,7 +44,9 @@ class NLUParser:
         'tokyo', 'new york', 'nyc', 'los angeles', 'la', 'chicago', 'miami',
         'san francisco', 'sf', 'seattle', 'boston', 'washington', 'dc',
         'paris', 'london', 'dubai', 'singapore', 'bangkok', 'sydney',
-        'toronto', 'vancouver', 'mexico city', 'rio', 'buenos aires'
+        'toronto', 'vancouver', 'mexico city', 'rio', 'buenos aires',
+        'delhi', 'mumbai', 'bangalore', 'chennai', 'kolkata', 'hyderabad',
+        'bombay'  # Mumbai is also known as Bombay
     }
     
     # Budget keywords
@@ -44,6 +59,7 @@ class NLUParser:
     CONSTRAINT_KEYWORDS = {
         'pet-friendly': ['pet', 'pets', 'dog', 'dogs', 'cat', 'cats', 'pet-friendly', 'pet friendly'],
         'near-transit': ['transit', 'metro', 'subway', 'train', 'public transport', 'public transportation', 'near transit'],
+        'near-airport': ['near airport', 'near the airport', 'airport', 'close to airport', 'airport proximity', 'near jfk', 'near lga', 'near sfo', 'near lax'],
         'no-red-eye': ['no red-eye', 'no redeye', 'avoid red-eye', 'avoid redeye', 'no red eye', 'avoid red eye'],
         'direct': ['direct', 'nonstop', 'non-stop', 'no layover', 'no stops'],
         'refundable': ['refundable', 'refund', 'cancel', 'cancellation'],
@@ -52,7 +68,32 @@ class NLUParser:
         'downtown': ['downtown', 'city center', 'city centre', 'central']
     }
     
-    def parse(self, message: str) -> Dict[str, Any]:
+    def __init__(self, use_ollama: Optional[bool] = None):
+        """
+        Initialize NLU Parser
+        
+        Args:
+            use_ollama: Whether to use Ollama for parsing (None = auto-detect)
+        """
+        self.use_ollama = use_ollama
+        if use_ollama is None:
+            # Auto-detect: use Ollama if available and enabled
+            self.use_ollama = (
+                OLLAMA_AVAILABLE and 
+                os.getenv("USE_OLLAMA", "false").lower() == "true"
+            )
+        
+        if self.use_ollama and OLLAMA_AVAILABLE:
+            try:
+                self.ollama_service = get_ollama_service()
+                self.use_ollama = self.ollama_service.is_available
+            except Exception:
+                self.use_ollama = False
+                self.ollama_service = None
+        else:
+            self.ollama_service = None
+    
+    def parse(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Parse natural language message into structured trip request
         
@@ -70,7 +111,94 @@ class NLUParser:
                 'confidence': 0.85
             }
         """
+        # Use fast rule-based parsing (default) - Ollama is too slow for real-time chat
+        # Only use Ollama if explicitly enabled, available, and with very short timeout
+        if self.use_ollama and self.ollama_service and self.ollama_service.is_available:
+            try:
+                # Try Ollama with 2 second timeout (very short)
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(self.ollama_service.parse_trip_request, message)
+                    parsed = future.result(timeout=2.0)
+                
+                # Validate and merge with rule-based parsing for confidence
+                rule_based = self._parse_rule_based(message, context=context)
+                # Merge results, preferring Ollama but using rule-based as fallback
+                for key in ['origin', 'destination', 'city', 'budget', 'travelers']:
+                    if not parsed.get(key) and rule_based.get(key):
+                        parsed[key] = rule_based[key]
+                # Use higher confidence
+                parsed['confidence'] = max(parsed.get('confidence', 0.5), rule_based.get('confidence', 0.5))
+                parsed['raw_message'] = message
+                return parsed
+            except (Exception, concurrent.futures.TimeoutError) as e:
+                # Fast fallback to rule-based
+                pass
+        
+        # Use fast rule-based parsing (default)
+        return self._parse_rule_based(message, context=context)
+    
+    def _parse_rule_based(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Rule-based parsing (original implementation)"""
         message_lower = message.lower()
+        message_clean = message.strip()
+        
+        # Use context to help disambiguate follow-up messages
+        # If we're asking for origin and user provides a city, treat it as origin
+        if context:
+            awaiting = context.get('awaiting_clarification', False)
+            missing_fields = context.get('_missing_fields', [])
+            
+            # If we're asking for origin and user provides just a city/airport code
+            if 'origin' in missing_fields and not any(word in message_lower for word in ['to', 'destination', 'going']):
+                # Check city/airport mapping first (before generic extraction)
+                origin = self._extract_city_or_airport(message_clean)
+                if not origin:
+                    origin = self._extract_origin(message_lower)
+                if origin:
+                    return {
+                        'origin': origin,
+                        'destination': None,
+                        'city': None,
+                        'dates': None,
+                        'budget': None,
+                        'travelers': None,
+                        'constraints': [],
+                        'raw_message': message,
+                        'confidence': 0.9
+                    }
+            
+            # If we're asking for destination and user provides just a city
+            if 'destination' in missing_fields and not any(word in message_lower for word in ['from', 'depart', 'leaving']):
+                destination = self._extract_destination(message_lower) or self._extract_city_or_airport(message_clean)
+                if destination:
+                    return {
+                        'origin': None,
+                        'destination': destination,
+                        'city': destination,
+                        'dates': None,
+                        'budget': None,
+                        'travelers': None,
+                        'constraints': [],
+                        'raw_message': message,
+                        'confidence': 0.9
+                    }
+            
+            # If we're asking for budget and user provides just a number
+            if 'budget' in missing_fields:
+                budget = self._extract_budget(message_lower)
+                if budget:
+                    return {
+                        'origin': None,
+                        'destination': None,
+                        'city': None,
+                        'dates': None,
+                        'budget': budget,
+                        'travelers': None,
+                        'constraints': [],
+                        'raw_message': message,
+                        'confidence': 0.9
+                    }
         
         origin = self._extract_origin(message_lower)
         destination = self._extract_destination(message_lower)
@@ -100,6 +228,35 @@ class NLUParser:
     
     def _extract_origin(self, text: str) -> Optional[str]:
         """Extract origin airport code or city"""
+        text_lower = text.lower()
+        
+        # Handle "from X to Y" pattern - extract origin after "from"
+        if ' from ' in text_lower and ' to ' in text_lower:
+            # Pattern: "from Mumbai to Delhi"
+            from_parts = text_lower.split(' from ')
+            if len(from_parts) > 1:
+                after_from = from_parts[1].split(' to ')[0].strip()
+                # Remove any trailing words
+                for stop_word in [' for ', ' with ', ' budget', ' under', ' people', ' travelers']:
+                    if stop_word in after_from:
+                        after_from = after_from.split(stop_word)[0].strip()
+                # Check if it's a known city
+                origin = self._extract_city_or_airport(after_from)
+                if origin:
+                    return origin
+        elif ' from ' in text_lower:
+            # Pattern: "from Mumbai" (no "to")
+            from_parts = text_lower.split(' from ')
+            if len(from_parts) > 1:
+                after_from = from_parts[1].strip()
+                # Remove trailing words
+                for stop_word in [' for ', ' with ', ' budget', ' under', ' people', ' travelers', ' to ']:
+                    if stop_word in after_from:
+                        after_from = after_from.split(stop_word)[0].strip()
+                origin = self._extract_city_or_airport(after_from)
+                if origin:
+                    return origin
+        
         # Look for airport codes (3 uppercase letters)
         airport_pattern = r'\b([A-Z]{3})\s+(?:departure|depart|from|leaving|leaves)\b'
         match = re.search(airport_pattern, text, re.IGNORECASE)
@@ -153,6 +310,21 @@ class NLUParser:
             return 'tropical region'
         if 'anywhere' in text_lower:
             return 'anywhere'  # Flexible destination
+        
+        # Handle "from X to Y" pattern - extract destination after "to"
+        if ' to ' in text_lower:
+            # Pattern: "from Mumbai to Delhi" or "Mumbai to Delhi"
+            to_parts = text_lower.split(' to ')
+            if len(to_parts) > 1:
+                after_to = to_parts[1].strip()
+                # Remove any trailing words like "for", "with", "budget", etc.
+                for stop_word in [' for ', ' with ', ' budget', ' under', ' people', ' travelers']:
+                    if stop_word in after_to:
+                        after_to = after_to.split(stop_word)[0].strip()
+                # Check if it's a known city
+                dest = self._extract_city_or_airport(after_to)
+                if dest:
+                    return dest
         
         # Split text at "from" to separate destination and origin
         # This prevents "miami from sfo" from being captured as destination
@@ -406,4 +578,51 @@ class NLUParser:
             confidence += 0.1
         
         return min(confidence, 1.0)
+    
+    def _extract_city_or_airport(self, text: str) -> Optional[str]:
+        """Extract city name or airport code from simple text"""
+        text_upper = text.upper().strip()
+        text_lower = text.lower().strip()
+        
+        # City to airport code mapping
+        city_to_airport = {
+            'san francisco': 'SFO',
+            'sf': 'SFO',
+            'new york': 'JFK',
+            'nyc': 'JFK',
+            'los angeles': 'LAX',
+            'la': 'LAX',
+            'chicago': 'ORD',
+            'miami': 'MIA',
+            'seattle': 'SEA',
+            'boston': 'BOS',
+            'tokyo': 'NRT',
+            'delhi': 'DEL',
+            'mumbai': 'BOM',
+            'bombay': 'BOM',  # Mumbai is also known as Bombay
+            'paris': 'CDG',
+            'london': 'LHR',
+        }
+        
+        # Check city mapping first
+        if text_lower in city_to_airport:
+            return city_to_airport[text_lower]
+        
+        # Check if it's a 3-letter airport code
+        if len(text_upper) == 3 and text_upper.isalpha():
+            if text_upper.lower() in self.AIRPORT_CODES:
+                return text_upper
+        
+        # Check if it's a known city (return city name, not code)
+        text_title = text.strip().title()
+        for city in self.MAJOR_CITIES:
+            if city.lower() == text_lower or text_lower in city.lower():
+                # Map to airport code if available, otherwise return city name
+                return city_to_airport.get(city.lower(), city.title())
+        
+        # Check common city name patterns
+        if len(text.split()) <= 3:  # Likely a city name if 1-3 words
+            return text_title
+        
+        return None
 
