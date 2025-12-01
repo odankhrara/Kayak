@@ -1,13 +1,12 @@
 #!/bin/bash
 
 # Kayak System - Start All Services
-# This script starts all backend services and the frontend
+# This script starts all backend services
 
 set -e
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICES_DIR="$BASE_DIR/services"
-FRONTEND_DIR="$(cd "$BASE_DIR/.." && pwd)/frontend"
 
 echo "🚀 Starting Kayak System..."
 echo ""
@@ -96,36 +95,10 @@ start_service "admin-service" "$SERVICES_DIR/admin-service" 8006
 # 7. Analytics Service
 start_service "analytics-service" "$SERVICES_DIR/analytics-service" 8004
 
-# 8. Frontend
-echo ""
-echo "🌐 Starting Frontend..."
-cd "$FRONTEND_DIR"
-
-if check_port 3000; then
-    echo -e "${YELLOW}⚠️  Port 3000 is already in use. Frontend may already be running.${NC}"
-else
-    # Use Node.js SPA server to serve dist folder with routing support
-    if [ -f "serve.js" ] && [ -d "dist" ]; then
-        node serve.js > "$BASE_DIR/logs/frontend.log" 2>&1 &
-        echo $! > "$BASE_DIR/logs/frontend.pid"
-        sleep 3
-        echo -e "${GREEN}✅ Frontend started with SPA routing (PID: $(cat "$BASE_DIR/logs/frontend.pid"))${NC}"
-    elif [ -d "node_modules" ]; then
-        # Fallback to npm run dev if source files exist
-        npm run dev > "$BASE_DIR/logs/frontend.log" 2>&1 &
-        echo $! > "$BASE_DIR/logs/frontend.pid"
-        sleep 3
-        echo -e "${GREEN}✅ Frontend started (PID: $(cat "$BASE_DIR/logs/frontend.pid"))${NC}"
-    else
-        echo -e "${RED}❌ Frontend dist folder or serve.js not found${NC}"
-    fi
-fi
-
 echo ""
 echo -e "${GREEN}🎉 All services started!${NC}"
 echo ""
 echo "📍 Service URLs:"
-echo "   - Frontend:        http://localhost:3000"
 echo "   - API Gateway:     http://localhost:4000"
 echo "   - User Service:    http://localhost:8001"
 echo "   - Listing Service: http://localhost:8002"
