@@ -3,6 +3,14 @@ from typing import Dict, Any, Optional, List
 from sqlmodel import Session
 from app.models import FlightDeal, HotelDeal, Bundle
 import re
+import os
+
+try:
+    from app.services.ollama_service import get_ollama_service
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
+    get_ollama_service = None
 
 
 class PolicyQA:
@@ -28,6 +36,20 @@ class PolicyQA:
     
     def __init__(self, session: Session):
         self.session = session
+        # Initialize Ollama if available
+        self.use_ollama = (
+            OLLAMA_AVAILABLE and 
+            os.getenv("USE_OLLAMA", "false").lower() == "true"
+        )
+        if self.use_ollama:
+            try:
+                self.ollama_service = get_ollama_service()
+                self.use_ollama = self.ollama_service.is_available
+            except Exception:
+                self.use_ollama = False
+                self.ollama_service = None
+        else:
+            self.ollama_service = None
     
     def answer_question(
         self,
@@ -75,7 +97,39 @@ class PolicyQA:
                     if hotel_ids:
                         hotel = self.session.get(HotelDeal, hotel_ids[0])
         
-        # Generate answer based on question type
+        # Try Ollama first if available
+        if self.use_ollama and self.ollama_service:
+            try:
+                context = {}
+                if flight:
+                    context["flight"] = {
+                        "airline": flight.airline,
+                        "price": flight.discounted_price,
+                        "tags": flight.tags or ""
+                    }
+                if hotel:
+                    context["hotel"] = {
+                        "name": hotel.name,
+                        "city": hotel.city,
+                        "price": hotel.discounted_price_per_night,
+                        "tags": hotel.tags or ""
+                    }
+                
+                ai_answer = self.ollama_service.answer_policy_question(question, context)
+                if ai_answer and not ai_answer.startswith("I'm currently using"):
+                    # Get details from rule-based for structured data
+                    rule_answer = self._generate_answer(question_type, question_lower, flight, hotel)
+                    return {
+                        "question": question,
+                        "question_type": question_type,
+                        "answer": ai_answer,
+                        "details": rule_answer.get("details", {}),
+                        "source": "ollama"
+                    }
+            except Exception as e:
+                print(f"[PolicyQA] Ollama answer failed: {e}")
+        
+        # Fallback to rule-based answers
         answer = self._generate_answer(question_type, question_lower, flight, hotel)
         
         return {

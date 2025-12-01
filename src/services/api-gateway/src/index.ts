@@ -18,6 +18,32 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+// Root route - API information
+app.get('/', (req, res) => {
+  res.json({
+    service: 'Kayak API Gateway',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      users: '/api/users',
+      listings: '/api/listings',
+      bookings: '/api/bookings',
+      billing: '/api/billing',
+      admin: '/api/admin',
+      ai: '/api/ai',
+      tracking: '/api/tracking'
+    },
+    services: {
+      userService: 'http://localhost:8001',
+      listingService: 'http://localhost:8002',
+      bookingService: 'http://localhost:8003',
+      analyticsService: 'http://localhost:8004',
+      aiRecommendation: 'http://localhost:8005'
+    }
+  })
+})
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'api-gateway' })

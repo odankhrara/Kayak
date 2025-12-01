@@ -19,50 +19,89 @@ class DealDetector:
         price: float,
         availability: int,
         historical_data: Optional[Dict[str, Any]] = None
-    ) -> float:
-        """Calculate deal score (0-100) based on multiple factors"""
+    ) -> int:
+        """
+        Calculate deal score (0-100) as small integer based on multiple factors
+        
+        Rules per specification:
+        - ≥15% below 30-day average
+        - Limited inventory (<5)
+        - Promo end date
+        """
         score = 0.0
         
-        # Discount factor (0-50 points)
-        discount_score = min(discount_percentage * 0.5, 50)
-        score += discount_score
-        
-        # Price factor (0-30 points) - lower prices score higher
-        if price < 100:
-            price_score = 30
-        elif price < 500:
-            price_score = 25 - (price - 100) * 0.05
-        elif price < 1000:
-            price_score = 15 - (price - 500) * 0.02
+        # Historical price comparison (0-40 points)
+        # Check if ≥15% below 30-day average (per specification)
+        if historical_data and historical_data.get('avg_30d_price'):
+            avg_30d_price = historical_data['avg_30d_price']
+            if avg_30d_price > 0:
+                price_diff_pct = ((avg_30d_price - price) / avg_30d_price) * 100
+                if price_diff_pct >= 15:  # ≥15% below 30-day avg
+                    score += 40
+                elif price_diff_pct >= 10:
+                    score += 30
+                elif price_diff_pct >= 5:
+                    score += 20
+                else:
+                    score += 10
         else:
-            price_score = max(5, 10 - (price - 1000) * 0.01)
-        score += price_score
+            # Fallback: use discount percentage
+            discount_score = min(discount_percentage * 0.4, 40)
+            score += discount_score
         
-        # Availability factor (0-20 points)
-        if availability > 10:
-            availability_score = 20
-        elif availability > 5:
-            availability_score = 15
-        elif availability > 0:
+        # Limited inventory factor (0-30 points)
+        # Mark Limited availability (<5) per specification
+        if availability < 5:
+            # Limited inventory - higher score
+            if availability == 0:
+                availability_score = 0
+            elif availability == 1:
+                availability_score = 30  # Very limited
+            elif availability == 2:
+                availability_score = 25
+            elif availability == 3:
+                availability_score = 20
+            else:  # availability == 4
+                availability_score = 15
+        elif availability < 10:
             availability_score = 10
         else:
-            availability_score = 0
+            availability_score = 5
         score += availability_score
         
-        # Historical trend factor (if available) - uses 30-day average
-        if historical_data and historical_data.get("avg_price_30d"):
-            avg_price_30d = historical_data.get("avg_price_30d")
-            if avg_price_30d and price < avg_price_30d:
-                # Calculate how much below average
-                price_drop = ((avg_price_30d - price) / avg_price_30d) * 100
-                if price_drop >= 15:
-                    score += 15  # Bonus for ≥15% below 30-day average
-                elif price_drop >= 10:
-                    score += 10  # Bonus for ≥10% below average
-                elif price_drop >= 5:
-                    score += 5   # Small bonus for ≥5% below average
+        # Promo end date factor (0-20 points)
+        # Check if promo is ending soon
+        if historical_data and historical_data.get('promo_end_date'):
+            from datetime import datetime
+            try:
+                promo_end = datetime.fromisoformat(historical_data['promo_end_date'])
+                days_until_end = (promo_end - datetime.now()).days
+                if days_until_end <= 1:
+                    score += 20  # Ending today/tomorrow
+                elif days_until_end <= 3:
+                    score += 15
+                elif days_until_end <= 7:
+                    score += 10
+                else:
+                    score += 5
+            except:
+                score += 5
+        else:
+            score += 5  # Default if no promo end date
         
-        return min(score, 100.0)
+        # Price factor (0-10 points) - lower prices score higher
+        if price < 100:
+            price_score = 10
+        elif price < 500:
+            price_score = 8
+        elif price < 1000:
+            price_score = 5
+        else:
+            price_score = 2
+        score += price_score
+        
+        # Return as small integer (0-100)
+        return int(min(100, max(0, score)))
     
     @staticmethod
     def is_good_deal(deal_score: float, threshold: float = 60.0) -> bool:
@@ -112,12 +151,17 @@ class DealDetector:
             historical_data
         )
         
+        # Get 30-day average for deal detection
+        avg_30d = None
+        if historical_data:
+            avg_30d = historical_data.get("avg_30d_price") or historical_data.get("avg_price_30d")
+        
         return {
             "original_price_per_night": original_price,
             "discounted_price_per_night": current_price,
             "discount_percentage": discount,
             "deal_score": deal_score,
             "is_good_deal": DealDetector.is_good_deal(deal_score),
-            "historical_avg_30d": historical_data.get("avg_price_30d") if historical_data else None
+            "historical_avg_30d": avg_30d
         }
 

@@ -32,6 +32,7 @@ class ChatContextManager:
         context = self.get_context(session_id)
         
         # Merge new information with existing context
+        # Only update if new value is provided (not None/empty)
         if parsed.get('origin'):
             context['origin'] = parsed['origin']
         if parsed.get('destination'):
@@ -50,26 +51,30 @@ class ChatContextManager:
                 if constraint not in context['constraints']:
                     context['constraints'].append(constraint)
         
+        # Debug: Print context after update
+        print(f"[Context] Updated context for {session_id}: origin={context.get('origin')}, destination={context.get('destination')}, budget={context.get('budget')}")
+        
         return context
     
     def merge_with_context(self, session_id: str, parsed: ParsedTripRequest) -> ParsedTripRequest:
         """Merge parsed request with existing context"""
         context = self.get_context(session_id)
         
-        # Create merged request
+        # Create merged request - use parsed value if provided, otherwise use context
+        # This ensures context is preserved when user provides only partial info (like just budget)
         merged = ParsedTripRequest(
-            origin=parsed.origin or context.get('origin'),
-            destination=parsed.destination or context.get('destination'),
-            city=parsed.city or context.get('city'),
-            budget=parsed.budget or context.get('budget'),
-            travelers=parsed.travelers or context.get('travelers'),
-            dates=parsed.dates or context.get('dates'),
+            origin=parsed.origin if parsed.origin else context.get('origin'),
+            destination=parsed.destination if parsed.destination else context.get('destination'),
+            city=parsed.city if parsed.city else context.get('city'),
+            budget=parsed.budget if parsed.budget else context.get('budget'),
+            travelers=parsed.travelers if parsed.travelers else context.get('travelers'),
+            dates=parsed.dates if parsed.dates else context.get('dates'),
             constraints=list(set((parsed.constraints or []) + context.get('constraints', []))),
             confidence=parsed.confidence,
             raw_message=parsed.raw_message
         )
         
-        # Update context
+        # Update context with merged values (preserves all fields)
         self.update_context(session_id, merged.model_dump())
         
         return merged

@@ -5,6 +5,14 @@ from app.models import FlightDeal, HotelDeal, Bundle, Watch
 from app.services.deal_selector import DealSelector
 from app.schemas import BundleCreate, BundleSearchParams
 from datetime import datetime, timedelta
+import os
+
+try:
+    from app.services.ollama_service import get_ollama_service
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
+    get_ollama_service = None
 
 
 class ConciergeAgent:
@@ -13,6 +21,20 @@ class ConciergeAgent:
     def __init__(self, session: Session):
         self.session = session
         self.deal_selector = DealSelector(session)
+        # Initialize Ollama if available
+        self.use_ollama = (
+            OLLAMA_AVAILABLE and 
+            os.getenv("USE_OLLAMA", "false").lower() == "true"
+        )
+        if self.use_ollama:
+            try:
+                self.ollama_service = get_ollama_service()
+                self.use_ollama = self.ollama_service.is_available
+            except Exception:
+                self.use_ollama = False
+                self.ollama_service = None
+        else:
+            self.ollama_service = None
     
     def create_bundle(
         self,
@@ -70,7 +92,23 @@ class ConciergeAgent:
                     all_hotels.extend(city_hotels)
                 hotels = sorted(all_hotels, key=lambda h: h.deal_score, reverse=True)[:3]
             else:
+                # Map destination to city name for hotel search
                 search_city = city or destination
+                
+                # Convert airport codes to city names for hotel search
+                airport_to_city = {
+                    'DEL': 'Delhi', 'BOM': 'Mumbai', 'NRT': 'Tokyo', 'HND': 'Tokyo',
+                    'JFK': 'New York', 'LGA': 'New York', 'EWR': 'New York',
+                    'LAX': 'Los Angeles', 'SFO': 'San Francisco', 'MIA': 'Miami',
+                    'ORD': 'Chicago', 'LHR': 'London', 'CDG': 'Paris'
+                }
+                
+                # If search_city is an airport code, convert to city name
+                if search_city and len(search_city) == 3 and search_city.upper() in airport_to_city:
+                    search_city = airport_to_city[search_city.upper()]
+                elif search_city and search_city.upper() in airport_to_city:
+                    search_city = airport_to_city[search_city.upper()]
+                
                 hotels = self.deal_selector.get_best_hotel_deals(
                     city=search_city,
                     max_price=max_price * 0.5 if max_price else None,
@@ -154,19 +192,151 @@ class ConciergeAgent:
         2. If not enough, creates new bundles from available deals
         3. Always returns bundles if deals are available (even if no exact match)
         """
-        # First try to find existing bundles
+        # First try to find existing bundles matching the route
         existing = self.deal_selector.get_best_bundles(params, limit=limit)
         
-        if len(existing) >= limit:
-            return existing
+        # Only return existing bundles if they actually match the route
+        # Check if bundles have flights matching origin/destination
+        matching_bundles = []
+        for bundle in existing:
+            if bundle.flight_deal_ids:
+                flight_ids = [int(id) for id in bundle.flight_deal_ids.split(",") if id]
+                for flight_id in flight_ids[:1]:
+                    flight = self.session.get(FlightDeal, flight_id)
+                    if flight:
+                        origin_match = not params.origin or (
+                            flight.origin.upper() == params.origin.upper() or
+                            params.origin.upper() in flight.origin.upper()
+                        )
+                        dest_match = not params.destination or (
+                            flight.destination.upper() == params.destination.upper() or
+                            params.destination.upper() in flight.destination.upper()
+                        )
+                        if origin_match and dest_match:
+                            matching_bundles.append(bundle)
+                            break
+        
+        # If we have matching bundles, return them
+        if len(matching_bundles) >= limit:
+            return matching_bundles
         
         # If not enough existing bundles, try to create new ones from available deals
-        # Check if we have any deals at all
+        # First, try to fetch from CSV if database is empty
         from sqlmodel import select, func
         from app.models import FlightDeal, HotelDeal
         
         flight_count = self.session.exec(select(func.count(FlightDeal.id)).where(FlightDeal.is_active == True)).one()
         hotel_count = self.session.exec(select(func.count(HotelDeal.id)).where(HotelDeal.is_active == True)).one()
+        
+        # If database is empty or has very few deals, fetch from CSV
+        if flight_count < 5 or hotel_count < 5:
+            try:
+                from app.services.csv_query_service import CSVQueryService
+                csv_service = CSVQueryService()
+                
+                # Fetch flights from CSV
+                if flight_count < 5:
+                    csv_flights = csv_service.search_flights(
+                        origin=params.origin,
+                        destination=params.destination,
+                        max_price=params.max_price * 0.4 if params.max_price else None,
+                        limit=10
+                    )
+                    
+                    # Create flight deals from CSV
+                    for flight_data in csv_flights[:5]:
+                        try:
+                            if not flight_data.get('origin') or not flight_data.get('destination'):
+                                continue
+                            
+                            existing = self.session.exec(
+                                select(FlightDeal).where(
+                                    FlightDeal.origin == flight_data.get('origin'),
+                                    FlightDeal.destination == flight_data.get('destination'),
+                                    FlightDeal.airline == flight_data.get('airline', 'Unknown')
+                                )
+                            ).first()
+                            
+                            if not existing:
+                                from datetime import datetime, timedelta
+                                import random
+                                
+                                price = float(flight_data.get('price', 500))
+                                dep_time = datetime.now() + timedelta(days=random.randint(1, 60))
+                                
+                                flight_deal = FlightDeal(
+                                    airline=flight_data.get('airline', 'Unknown'),
+                                    flight_number=flight_data.get('flight_number', '') or f"{flight_data.get('airline', 'XX')[:2]}{random.randint(100, 9999)}",
+                                    origin=flight_data.get('origin', ''),
+                                    destination=flight_data.get('destination', ''),
+                                    departure_time=dep_time,
+                                    arrival_time=dep_time + timedelta(hours=random.randint(2, 12)),
+                                    original_price=price * 1.2,
+                                    discounted_price=price,
+                                    discount_percentage=16.67,
+                                    deal_score=random.uniform(0.7, 1.0),
+                                    is_active=True,
+                                    tags=flight_data.get('class', 'economy'),
+                                    available_seats=random.randint(5, 50)
+                                )
+                                self.session.add(flight_deal)
+                        except Exception as e:
+                            continue
+                
+                # Fetch hotels from CSV
+                if hotel_count < 5:
+                    csv_hotels = csv_service.search_hotels(
+                        city=params.city or params.destination,
+                        max_price=params.max_price * 0.5 if params.max_price else None,
+                        limit=10
+                    )
+                    
+                    # Create hotel deals from CSV
+                    for hotel_data in csv_hotels[:5]:
+                        try:
+                            if not hotel_data.get('city') or not hotel_data.get('name'):
+                                continue
+                            
+                            existing = self.session.exec(
+                                select(HotelDeal).where(
+                                    HotelDeal.name == hotel_data.get('name'),
+                                    HotelDeal.city == hotel_data.get('city')
+                                )
+                            ).first()
+                            
+                            if not existing:
+                                import random
+                                
+                                price = float(hotel_data.get('price', 100) or hotel_data.get('price_per_night', 100))
+                                address = hotel_data.get('address', '') or f"{hotel_data.get('name')}, {hotel_data.get('city')}"
+                                
+                                hotel_deal = HotelDeal(
+                                    name=hotel_data.get('name', 'Unknown Hotel'),
+                                    city=hotel_data.get('city', 'Unknown'),
+                                    country=hotel_data.get('country', 'Unknown'),
+                                    address=address,
+                                    original_price_per_night=price * 1.25,
+                                    discounted_price_per_night=price,
+                                    discount_percentage=20.0,
+                                    deal_score=random.uniform(0.7, 1.0),
+                                    is_active=True,
+                                    tags=hotel_data.get('tags', 'standard'),
+                                    available_rooms=random.randint(5, 20),
+                                    rating=float(hotel_data.get('rating', 4.0)) if hotel_data.get('rating') else 4.0
+                                )
+                                self.session.add(hotel_deal)
+                        except Exception as e:
+                            continue
+                
+                # Commit new deals
+                self.session.commit()
+                
+                # Re-check counts
+                flight_count = self.session.exec(select(func.count(FlightDeal.id)).where(FlightDeal.is_active == True)).one()
+                hotel_count = self.session.exec(select(func.count(HotelDeal.id)).where(HotelDeal.is_active == True)).one()
+                
+            except Exception as e:
+                print(f"[ConciergeAgent] Error fetching from CSV: {e}")
         
         if flight_count == 0 or hotel_count == 0:
             # No deals available - return empty list
@@ -208,8 +378,14 @@ class ConciergeAgent:
         if bundles_created:
             return bundles_created
         
-        # If we still have no bundles, return existing ones (even if fewer than limit)
-        return existing
+        # If we still have no bundles, only return matching existing ones
+        # Never return bundles that don't match the requested route
+        if matching_bundles:
+            return matching_bundles
+        
+        # If no matching bundles and couldn't create new ones, return empty
+        # This is better than returning wrong bundles
+        return []
     
     def explain_tradeoffs(
         self,
@@ -223,7 +399,45 @@ class ConciergeAgent:
         
         This makes the concierge explain WHY it chose certain deals,
         helping users understand the value proposition.
+        
+        Uses Ollama for intelligent explanations if available.
         """
+        # Try Ollama first if available
+        if self.use_ollama and self.ollama_service:
+            try:
+                bundle_info = {
+                    "total_price": bundle.total_price,
+                    "savings": bundle.savings
+                }
+                flights_info = [
+                    {
+                        "airline": f.airline,
+                        "price": f.discounted_price,
+                        "deal_score": f.deal_score,
+                        "tags": f.tags
+                    }
+                    for f in flights
+                ]
+                hotels_info = [
+                    {
+                        "name": h.name,
+                        "city": h.city,
+                        "price": h.discounted_price_per_night,
+                        "deal_score": h.deal_score,
+                        "tags": h.tags
+                    }
+                    for h in hotels
+                ]
+                
+                explanation = self.ollama_service.generate_explanation(
+                    bundle_info, flights_info, hotels_info
+                )
+                if explanation and not explanation.startswith("I'm currently using"):
+                    return explanation
+            except Exception as e:
+                print(f"[ConciergeAgent] Ollama explanation failed: {e}")
+        
+        # Fallback to rule-based explanations
         explanations = []
         
         # Explain price/value tradeoff

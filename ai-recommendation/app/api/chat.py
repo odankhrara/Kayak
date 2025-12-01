@@ -169,44 +169,63 @@ async def chat_message(
                     requires_clarification=True
                 )
         
-        # Check if this is a policy/logistics question
-        policy_qa = PolicyQA(session)
-        is_policy_question = any(
-            keyword in message_lower 
-            for keywords in policy_qa.POLICY_KEYWORDS.values() 
-            for keyword in keywords
-        ) or (any(
-            q_word in message_lower 
-            for q_word in ['what', 'how', 'when', 'where', 'why', 'is', 'does', 'can', 'do']
-        ) and not is_watch_request)
+        # Check if this is a refinement query (follow-up to previous search)
+        is_refinement = any(word in message_lower for word in ['what about', 'how about', 'also', 'add', 'make it', 'change', 'instead', 'near', 'with'])
+        has_context = context and (context.get('origin') or context.get('destination') or context.get('budget'))
         
-        # If it's a policy question, answer it directly
+        # Check if this is a policy/logistics question (skip for search queries)
+        # Only treat as policy question if it's clearly a question, not a search request
+        is_search_query = any(word in message_lower for word in ['find', 'search', 'show', 'book', 'trip', 'weekend', 'vacation', 'go to', 'departure', 'from'])
+        is_policy_question = not is_search_query and not is_refinement and (
+            any(
+                keyword in message_lower 
+                for keywords in PolicyQA(session).POLICY_KEYWORDS.values() 
+                for keyword in keywords
+            ) or (any(
+                q_word in message_lower 
+                for q_word in ['what', 'how', 'when', 'where', 'why', 'is', 'does', 'can', 'do']
+            ) and not is_watch_request)
+        )
+        
+        # If it's a policy question, answer it directly (with timeout)
         if is_policy_question:
-            # Try to get bundle/flight/hotel from context
-            context = context_manager.get_context(session_id)
-            bundle_id = context.get('last_bundle_id') if context else None
-            
-            answer = policy_qa.answer_question(
-                chat_message.message,
-                bundle_id=bundle_id
-            )
-            
-            return ChatResponse(
-                message=answer["answer"],
-                parsed_request=None,
-                bundles=None,
-                requires_clarification=False,
-                clarification_questions=[]
-            )
+            try:
+                # Try to get bundle/flight/hotel from context
+                context = context_manager.get_context(session_id)
+                bundle_id = context.get('last_bundle_id') if context else None
+                
+                policy_qa = PolicyQA(session)
+                answer = policy_qa.answer_question(
+                    chat_message.message,
+                    bundle_id=bundle_id
+                )
+                
+                return ChatResponse(
+                    message=answer["answer"],
+                    parsed_request=None,
+                    bundles=None,
+                    requires_clarification=False,
+                    clarification_questions=[]
+                )
+            except Exception as e:
+                # If policy QA fails, continue with search
+                print(f"[Chat] Policy QA error: {e}, continuing with search")
         
-        # Parse the natural language message
-        parsed = nlu_parser.parse(message)
+        # Get context first to help with parsing
+        context = context_manager.get_context(session_id)
+        missing_fields = context_manager.get_missing_fields(session_id)
+        
+        # Add missing fields to context for parser
+        context['_missing_fields'] = missing_fields
+        
+        # Parse the natural language message with context
+        parsed = nlu_parser.parse(message, context=context)
         parsed_request = ParsedTripRequest(**parsed)
         
         # Merge with existing context
         merged_request = context_manager.merge_with_context(session_id, parsed_request)
         
-        # Check what we have and what's missing
+        # Re-check what we have and what's missing after merge
         missing_fields = context_manager.get_missing_fields(session_id)
         context = context_manager.get_context(session_id)
         
@@ -248,6 +267,12 @@ async def chat_message(
                 city = city.lower().split('from')[0].strip().title()
             
             # Convert merged request to search params
+            # For refinements, add a helpful message
+            refinement_msg = ""
+            if is_refinement and has_context and parsed_request.constraints:
+                constraint_names = [c.replace('-', ' ') for c in parsed_request.constraints]
+                refinement_msg = f"I've updated your search to include: {', '.join(constraint_names)}. "
+            
             search_params = BundleSearchParams(
                 origin=search_request.origin,
                 destination=destination,
@@ -273,7 +298,8 @@ async def chat_message(
             
             # Generate response message with tradeoff explanations
             if bundles:
-                response_message = f"I found {len(bundles)} great deals for you! "
+                response_message = refinement_msg if refinement_msg else ""
+                response_message += f"I found {len(bundles)} great deals for you! "
                 response_message += f"Here are bundles starting at ${min(b['total_price'] for b in bundles):.2f}. "
                 
                 # Add tradeoff explanation for the first bundle
