@@ -6,6 +6,13 @@ import re
 import os
 
 try:
+    from app.services.groq_service import get_groq_service
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    get_groq_service = None
+
+try:
     from app.services.ollama_service import get_ollama_service
     OLLAMA_AVAILABLE = True
 except ImportError:
@@ -36,20 +43,34 @@ class PolicyQA:
     
     def __init__(self, session: Session):
         self.session = session
-        # Initialize Ollama if available
-        self.use_ollama = (
-            OLLAMA_AVAILABLE and 
-            os.getenv("USE_OLLAMA", "false").lower() == "true"
-        )
-        if self.use_ollama:
-            try:
-                self.ollama_service = get_ollama_service()
-                self.use_ollama = self.ollama_service.is_available
-            except Exception:
-                self.use_ollama = False
-                self.ollama_service = None
-        else:
-            self.ollama_service = None
+        # Initialize AI services (prefer Groq, fallback to Ollama)
+        self.use_groq = False
+        self.use_ollama = False
+        self.groq_service = None
+        self.ollama_service = None
+        
+        use_ai = os.getenv("USE_AI", "true").lower() == "true"
+        
+        if use_ai:
+            # Try Groq first (preferred)
+            if GROQ_AVAILABLE:
+                try:
+                    self.groq_service = get_groq_service()
+                    self.use_groq = self.groq_service.is_available
+                except Exception:
+                    self.use_groq = False
+                    self.groq_service = None
+            
+            # Fallback to Ollama if Groq not available
+            if not self.use_groq and OLLAMA_AVAILABLE:
+                use_ollama = os.getenv("USE_OLLAMA", "false").lower() == "true"
+                if use_ollama:
+                    try:
+                        self.ollama_service = get_ollama_service()
+                        self.use_ollama = self.ollama_service.is_available
+                    except Exception:
+                        self.use_ollama = False
+                        self.ollama_service = None
     
     def answer_question(
         self,
@@ -97,7 +118,39 @@ class PolicyQA:
                     if hotel_ids:
                         hotel = self.session.get(HotelDeal, hotel_ids[0])
         
-        # Try Ollama first if available
+        # Try Groq first if available (preferred)
+        if self.use_groq and self.groq_service:
+            try:
+                context = {}
+                if flight:
+                    context["flight"] = {
+                        "airline": flight.airline,
+                        "price": flight.discounted_price,
+                        "tags": flight.tags or ""
+                    }
+                if hotel:
+                    context["hotel"] = {
+                        "name": hotel.name,
+                        "city": hotel.city,
+                        "price": hotel.discounted_price_per_night,
+                        "tags": hotel.tags or ""
+                    }
+                
+                ai_answer = self.groq_service.answer_policy_question(question, context)
+                if ai_answer and not ai_answer.startswith("I'm currently using"):
+                    # Get details from rule-based for structured data
+                    rule_answer = self._generate_answer(question_type, question_lower, flight, hotel)
+                    return {
+                        "question": question,
+                        "question_type": question_type,
+                        "answer": ai_answer,
+                        "details": rule_answer.get("details", {}),
+                        "source": "groq"
+                    }
+            except Exception as e:
+                print(f"[PolicyQA] Groq answer failed: {e}")
+        
+        # Fallback to Ollama if Groq not available
         if self.use_ollama and self.ollama_service:
             try:
                 context = {}

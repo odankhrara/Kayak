@@ -1,22 +1,19 @@
-import { createConsumer } from '@kayak/common/src/kafka/kafkaClient'
-import { KAFKA_TOPICS } from '@kayak/common/src/kafka/topics'
-import { getMongoDb } from '@kayak/common/src/db/mongoClient'
+import { getConsumer } from '@kayak/common'
+import { KAFKA_TOPICS } from '@kayak/common'
+import { getMongoDb } from '@kayak/common'
+import { Consumer } from 'kafkajs'
 
 /**
  * Kafka consumer for click events
  * Consumes click events and stores them in MongoDB logs collection
  */
 export class ClickEventsConsumer {
-  private consumer: ReturnType<typeof createConsumer>
+  private consumer: Consumer | null = null
   private running = false
-
-  constructor() {
-    this.consumer = createConsumer('analytics-click-events-group')
-  }
 
   async start() {
     try {
-      await this.consumer.connect()
+      this.consumer = await getConsumer('analytics-click-events-group')
       await this.consumer.subscribe({
         topics: [KAFKA_TOPICS.CLICK_EVENT],
         fromBeginning: false
@@ -61,7 +58,9 @@ export class ClickEventsConsumer {
 
   async stop() {
     this.running = false
-    await this.consumer.disconnect()
+    if (this.consumer) {
+      await this.consumer.disconnect()
+    }
     console.log('Click events consumer stopped')
   }
 }

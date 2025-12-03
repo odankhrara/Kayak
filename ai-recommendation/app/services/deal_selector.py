@@ -18,7 +18,12 @@ class DealSelector:
         max_price: Optional[float] = None,
         limit: int = 10
     ) -> List[FlightDeal]:
-        """Get best flight deals matching criteria - fetches from CSV if needed"""
+        """
+        Get best flight deals matching criteria
+        
+        First checks AI service's flight_deals table, then falls back to main flights table
+        if needed. This ensures AI can access the same data as the main listing service.
+        """
         statement = select(FlightDeal).where(FlightDeal.is_active == True)
         
         # Map city names to airport codes
@@ -75,7 +80,93 @@ class DealSelector:
         statement = statement.order_by(FlightDeal.deal_score.desc()).limit(limit)
         results = list(self.session.exec(statement).all())
         
-        # If we don't have enough results, fetch from CSV
+        # If we don't have enough results, try fetching from main flights table (MySQL)
+        if len(results) < limit:
+            try:
+                from sqlalchemy import text
+                # Query main flights table directly
+                origin_code = origin.upper() if origin else None
+                dest_code = destination.upper() if destination else None
+                
+                query = """
+                    SELECT 
+                        flight_id, airline_name, departure_airport, arrival_airport,
+                        departure_datetime, arrival_datetime,
+                        price_per_ticket, available_seats,
+                        (price_per_ticket * 0.85) as discounted_price,
+                        (price_per_ticket * 0.15) as discount_amount,
+                        15.0 as discount_percentage,
+                        0.8 as deal_score,
+                        flight_class as tags
+                    FROM flights 
+                    WHERE status = 'scheduled' AND available_seats > 0
+                """
+                params = {}
+                
+                if origin_code:
+                    query += " AND departure_airport = :origin"
+                    params['origin'] = origin_code
+                if dest_code:
+                    query += " AND arrival_airport = :destination"
+                    params['destination'] = dest_code
+                if max_price:
+                    query += " AND price_per_ticket <= :max_price"
+                    params['max_price'] = max_price
+                
+                query += " ORDER BY price_per_ticket ASC LIMIT :limit"
+                params['limit'] = limit - len(results)
+                
+                # Execute raw SQL query
+                from app.db.session import engine
+                with engine.connect() as conn:
+                    result = conn.execute(text(query), params)
+                    rows = result.fetchall()
+                    
+                    # Convert MySQL flights to FlightDeal objects
+                    for row in rows:
+                        # Check if we already have this flight
+                        existing = any(
+                            f.origin == row.departure_airport and 
+                            f.destination == row.arrival_airport and
+                            f.airline == row.airline_name
+                            for f in results
+                        )
+                        if existing:
+                            continue
+                        
+                        # Convert Decimal to float for calculations
+                        price_per_ticket = float(row.price_per_ticket)
+                        discounted_price = float(row.discounted_price)
+                        
+                        flight_deal = FlightDeal(
+                            airline=row.airline_name,
+                            flight_number=row.flight_id,
+                            origin=row.departure_airport,
+                            destination=row.arrival_airport,
+                            departure_time=row.departure_datetime,
+                            arrival_time=row.arrival_datetime,
+                            original_price=price_per_ticket / 0.85,  # Reverse calculate original
+                            discounted_price=discounted_price,
+                            discount_percentage=float(row.discount_percentage),
+                            available_seats=int(row.available_seats),
+                            deal_score=float(row.deal_score),
+                            tags=str(row.tags) if row.tags else "economy",
+                            is_active=True
+                        )
+                        self.session.add(flight_deal)
+                        results.append(flight_deal)
+                    
+                    # Commit the new deals
+                    if rows:
+                        self.session.commit()
+                        # Refresh to get IDs
+                        for deal in results[-len(rows):]:
+                            self.session.refresh(deal)
+            except Exception as e:
+                print(f"[DealSelector] Error fetching from main flights table: {e}")
+                # Fall through to CSV fallback
+        
+        # If we still don't have enough results, fetch from CSV
         if len(results) < limit:
             try:
                 from app.services.csv_query_service import CSVQueryService
