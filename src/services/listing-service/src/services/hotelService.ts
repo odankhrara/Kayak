@@ -1,6 +1,6 @@
 import { HotelRepository } from '../repositories/hotelRepository'
 import { Hotel } from '../models/Hotel'
-import { redisCache } from '../../../common/src/cache/redisCache'
+import { redisCache } from '@kayak/common/src/cache/redisCache'
 
 export class HotelService {
   private repository = new HotelRepository()
