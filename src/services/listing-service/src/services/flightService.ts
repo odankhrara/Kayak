@@ -1,6 +1,6 @@
 import { FlightRepository } from '../repositories/flightRepository'
 import { Flight } from '../models/Flight'
-import { redisCache } from '../../../common/src/cache/redisCache'
+import { redisCache } from '@kayak/common/src/cache/redisCache'
 
 export class FlightService {
   private repository = new FlightRepository()

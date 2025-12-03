@@ -1,6 +1,5 @@
 import mysqlPool from '@kayak/common/src/db/mysqlPool'
 import { Flight } from '../models/Flight'
-import { RowDataPacket } from 'mysql2'
 
 export class FlightRepository {
   /**
