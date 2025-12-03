@@ -1,16 +1,18 @@
 export interface Flight {
   flightId: string
-  airline: string
+  airlineName: string
   departureAirport: string
   arrivalAirport: string
-  departureDate: Date
-  arrivalDate: Date
-  duration: number
+  departureDatetime: Date
+  arrivalDatetime: Date
+  durationMinutes: number
   flightClass: 'Economy' | 'Business' | 'First'
-  price: number
+  pricePerTicket: number
   totalSeats: number
   availableSeats: number
   rating?: number
+  reviewsCount: number,
+  status: 'scheduled'| 'cancelled'| 'delayed'| 'completed',
   createdAt: Date
   updatedAt: Date
 }

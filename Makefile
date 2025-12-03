@@ -107,13 +107,13 @@ start-backend:
 	@echo "🚀 Starting backend services..."
 	@mkdir -p src/logs
 	@export MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_USER=root MYSQL_PASSWORD=password MYSQL_DATABASE=kayak && \
-	cd src && ./start-all.sh || true
+	cd src && ./start-backend.sh || true
 	@sleep 3
 	@echo "✅ Backend services started"
 
 start-frontend:
 	@echo "🌐 Starting frontend..."
-	@cd frontend && npm run dev > ../src/logs/frontend.log 2>&1 & echo $$! > ../src/logs/frontend.pid
+	@cd src && ./start-frontend.sh || true
 	@sleep 2
 	@echo "✅ Frontend started on http://localhost:3000"
 
@@ -127,12 +127,19 @@ stop-backend:
 	@-pkill -f "node.*listing-service" || true
 	@-pkill -f "node.*booking-billing-service" || true
 	@-pkill -f "node.*analytics-service" || true
+	@-pkill -f "node.*admin-service" || true
 	@-if [ -f src/logs/api-gateway.pid ]; then kill $$(cat src/logs/api-gateway.pid) 2>/dev/null || true; fi
 	@-if [ -f src/logs/user-service.pid ]; then kill $$(cat src/logs/user-service.pid) 2>/dev/null || true; fi
 	@-if [ -f src/logs/listing-service.pid ]; then kill $$(cat src/logs/listing-service.pid) 2>/dev/null || true; fi
 	@-if [ -f src/logs/booking-billing-service.pid ]; then kill $$(cat src/logs/booking-billing-service.pid) 2>/dev/null || true; fi
 	@-if [ -f src/logs/analytics-service.pid ]; then kill $$(cat src/logs/analytics-service.pid) 2>/dev/null || true; fi
-	@rm -f src/logs/*.pid
+	@-if [ -f src/logs/admin-service.pid ]; then kill $$(cat src/logs/admin-service.pid) 2>/dev/null || true; fi
+	@rm -f src/logs/api-gateway.pid
+	@rm -f src/logs/user-service.pid
+	@rm -f src/logs/listing-service.pid
+	@rm -f src/logs/booking-billing-service.pid
+	@rm -f src/logs/analytics-service.pid
+	@rm -f src/logs/admin-service.pid
 	@echo "✅ Backend services stopped"
 
 stop-frontend:
