@@ -16,6 +16,13 @@ except ImportError:
         return default or datetime.now()
 
 try:
+    from app.services.groq_service import get_groq_service
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    get_groq_service = None
+
+try:
     from app.services.ollama_service import get_ollama_service
     OLLAMA_AVAILABLE = True
 except ImportError:
@@ -27,7 +34,7 @@ class NLUParser:
     """
     Parses natural language trip requests into structured data
     
-    Can use Ollama for intelligent parsing if available, otherwise falls back to rule-based parsing.
+    Can use Groq (preferred) or Ollama for intelligent parsing if available, otherwise falls back to rule-based parsing.
     """
     
     # Common airport codes (3-letter IATA codes)
@@ -36,7 +43,7 @@ class NLUParser:
         'sfo', 'lax', 'jfk', 'lga', 'ewr', 'ord', 'dfw', 'atl', 'den', 'sea',
         'las', 'mco', 'phx', 'mia', 'iad', 'bwi', 'sju', 'bna', 'msy',
         'bos', 'iad', 'dtw', 'msp', 'slt', 'clt', 'iah', 'mci', 'pdx', 'san',
-        'nrt', 'hnd', 'del', 'bom', 'cdg', 'lhr', 'lgw'
+        'nrt', 'hnd', 'del', 'bom', 'cdg', 'lhr', 'lgw', 'blr', 'maa', 'hyd', 'ccu'
     }
     
     # Common city names
@@ -68,30 +75,40 @@ class NLUParser:
         'downtown': ['downtown', 'city center', 'city centre', 'central']
     }
     
-    def __init__(self, use_ollama: Optional[bool] = None):
+    def __init__(self, use_ai: Optional[bool] = None):
         """
         Initialize NLU Parser
         
         Args:
-            use_ollama: Whether to use Ollama for parsing (None = auto-detect)
+            use_ai: Whether to use AI (Groq/Ollama) for parsing (None = auto-detect)
         """
-        self.use_ollama = use_ollama
-        if use_ollama is None:
-            # Auto-detect: use Ollama if available and enabled
-            self.use_ollama = (
-                OLLAMA_AVAILABLE and 
-                os.getenv("USE_OLLAMA", "false").lower() == "true"
-            )
+        self.use_groq = False
+        self.use_ollama = False
+        self.groq_service = None
+        self.ollama_service = None
         
-        if self.use_ollama and OLLAMA_AVAILABLE:
-            try:
-                self.ollama_service = get_ollama_service()
-                self.use_ollama = self.ollama_service.is_available
-            except Exception:
-                self.use_ollama = False
-                self.ollama_service = None
-        else:
-            self.ollama_service = None
+        if use_ai is None:
+            # Auto-detect: prefer Groq, fallback to Ollama
+            use_ai = os.getenv("USE_AI", "true").lower() == "true"
+        
+        if use_ai:
+            # Try Groq first (preferred)
+            if GROQ_AVAILABLE:
+                try:
+                    self.groq_service = get_groq_service()
+                    self.use_groq = self.groq_service.is_available
+                except Exception:
+                    self.use_groq = False
+                    self.groq_service = None
+            
+            # Fallback to Ollama if Groq not available
+            if not self.use_groq and OLLAMA_AVAILABLE:
+                try:
+                    self.ollama_service = get_ollama_service()
+                    self.use_ollama = self.ollama_service.is_available
+                except Exception:
+                    self.use_ollama = False
+                    self.ollama_service = None
     
     def parse(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -111,9 +128,28 @@ class NLUParser:
                 'confidence': 0.85
             }
         """
-        # Use fast rule-based parsing (default) - Ollama is too slow for real-time chat
-        # Only use Ollama if explicitly enabled, available, and with very short timeout
-        if self.use_ollama and self.ollama_service and self.ollama_service.is_available:
+        # Use AI parsing if available (prefer Groq, fallback to Ollama)
+        # Groq is fast enough for real-time, Ollama may need timeout
+        if self.use_groq and self.groq_service and self.groq_service.is_available:
+            try:
+                # Groq is fast, no timeout needed
+                parsed = self.groq_service.parse_trip_request(message)
+                
+                # Validate and merge with rule-based parsing for confidence
+                rule_based = self._parse_rule_based(message, context=context)
+                # Merge results, preferring Groq but using rule-based as fallback
+                for key in ['origin', 'destination', 'city', 'budget', 'travelers']:
+                    if not parsed.get(key) and rule_based.get(key):
+                        parsed[key] = rule_based[key]
+                # Use higher confidence
+                parsed['confidence'] = max(parsed.get('confidence', 0.5), rule_based.get('confidence', 0.5))
+                parsed['raw_message'] = message
+                return parsed
+            except Exception as e:
+                print(f"[NLUParser] Groq parsing failed: {e}")
+                # Fallback to rule-based
+                pass
+        elif self.use_ollama and self.ollama_service and self.ollama_service.is_available:
             try:
                 # Try Ollama with 2 second timeout (very short)
                 import concurrent.futures
@@ -211,6 +247,32 @@ class NLUParser:
                 # Split at "from" and take the first part
                 destination = dest_lower.split('from')[0].strip().title()
                 city = destination if not city else city
+        
+        # Validate origin and destination are different (prevent BOM→BOM)
+        if origin and destination:
+            # Normalize for comparison
+            origin_norm = origin.upper().strip()
+            dest_norm = destination.upper().strip()
+            
+            # Map city names to codes for comparison
+            city_to_code = {
+                'MUMBAI': 'BOM', 'BOMBAY': 'BOM',
+                'DELHI': 'DEL', 'NEW DELHI': 'DEL',
+                'TOKYO': 'NRT',
+                'NEW YORK': 'JFK', 'NYC': 'JFK',
+                'LOS ANGELES': 'LAX', 'LA': 'LAX',
+                'MIAMI': 'MIA',
+                'SAN FRANCISCO': 'SFO', 'SF': 'SFO',
+                'CHICAGO': 'ORD',
+            }
+            
+            origin_code = city_to_code.get(origin_norm, origin_norm)
+            dest_code = city_to_code.get(dest_norm, dest_norm)
+            
+            # If they're the same, clear destination (will ask for clarification)
+            if origin_code == dest_code and len(origin_code) == 3:
+                destination = None
+                city = None
         
         result = {
             'origin': origin,
@@ -312,19 +374,40 @@ class NLUParser:
             return 'anywhere'  # Flexible destination
         
         # Handle "from X to Y" pattern - extract destination after "to"
+        # Also handle "X to Y" pattern (without "from")
         if ' to ' in text_lower:
-            # Pattern: "from Mumbai to Delhi" or "Mumbai to Delhi"
+            # Pattern: "from Mumbai to Delhi" or "Mumbai to Delhi" or "BOM to DEL flights"
             to_parts = text_lower.split(' to ')
             if len(to_parts) > 1:
                 after_to = to_parts[1].strip()
-                # Remove any trailing words like "for", "with", "budget", etc.
-                for stop_word in [' for ', ' with ', ' budget', ' under', ' people', ' travelers']:
+                
+                # Extract first word - might be airport code (3 letters) or city name
+                first_word = after_to.split()[0] if after_to.split() else after_to
+                first_word_upper = first_word.upper().strip()
+                
+                # Check for airport codes first (3 uppercase letters) - before removing stop words
+                if len(first_word_upper) == 3 and first_word_upper.isalpha():
+                    # Check if it's a known airport code
+                    if first_word_upper.lower() in self.AIRPORT_CODES:
+                        return first_word_upper
+                    # Even if not in our list, if it's 3 letters, treat as airport code
+                    return first_word_upper
+                
+                # Remove any trailing words like "for", "with", "budget", "flights", etc.
+                stop_words = [' for ', ' with ', ' budget', ' under', ' people', ' travelers', ' on ', ' date', ' flights', ' flight', ' hotels', ' hotel', ' cars', ' car']
+                for stop_word in stop_words:
                     if stop_word in after_to:
                         after_to = after_to.split(stop_word)[0].strip()
+                        break
+                
                 # Check if it's a known city
                 dest = self._extract_city_or_airport(after_to)
                 if dest:
                     return dest
+                
+                # If it's a short word (likely airport code or city), return it
+                if len(after_to) <= 10 and not any(char.isdigit() for char in after_to):
+                    return after_to.title()
         
         # Split text at "from" to separate destination and origin
         # This prevents "miami from sfo" from being captured as destination
@@ -463,8 +546,9 @@ class NLUParser:
         
         # Look for single dates
         single_date_patterns = [
-            r'(\w+\s+\d+)',  # "October 25"
-            r'(\d+/\d+)',    # "10/25"
+            r'(\d+/\d+/\d+)',  # "12/15/2025" or "12/15/20205" (with typo)
+            r'(\w+\s+\d+)',    # "October 25"
+            r'(\d+/\d+)',       # "10/25"
         ]
         
         for pattern in single_date_patterns:
@@ -472,6 +556,21 @@ class NLUParser:
             if match:
                 try:
                     date_str = match.group(1)
+                    
+                    # Fix common date typos (e.g., "20205" → "2025")
+                    if '/' in date_str:
+                        parts = date_str.split('/')
+                        if len(parts) == 3:
+                            year = parts[2].strip()
+                            # Fix year typos: if year has 5 digits, take first 4
+                            if len(year) == 5 and year.isdigit():
+                                year = year[:4]
+                                date_str = f"{parts[0]}/{parts[1]}/{year}"
+                            # If year is 2 digits, assume 20XX
+                            elif len(year) == 2 and year.isdigit():
+                                year = f"20{year}"
+                                date_str = f"{parts[0]}/{parts[1]}/{year}"
+                    
                     if DATEUTIL_AVAILABLE:
                         parsed_date = date_parser.parse(date_str, default=datetime.now())
                     else:

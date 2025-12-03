@@ -8,6 +8,13 @@ from datetime import datetime, timedelta
 import os
 
 try:
+    from app.services.groq_service import get_groq_service
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    get_groq_service = None
+
+try:
     from app.services.ollama_service import get_ollama_service
     OLLAMA_AVAILABLE = True
 except ImportError:
@@ -21,20 +28,34 @@ class ConciergeAgent:
     def __init__(self, session: Session):
         self.session = session
         self.deal_selector = DealSelector(session)
-        # Initialize Ollama if available
-        self.use_ollama = (
-            OLLAMA_AVAILABLE and 
-            os.getenv("USE_OLLAMA", "false").lower() == "true"
-        )
-        if self.use_ollama:
-            try:
-                self.ollama_service = get_ollama_service()
-                self.use_ollama = self.ollama_service.is_available
-            except Exception:
-                self.use_ollama = False
-                self.ollama_service = None
-        else:
-            self.ollama_service = None
+        # Initialize AI services (prefer Groq, fallback to Ollama)
+        self.use_groq = False
+        self.use_ollama = False
+        self.groq_service = None
+        self.ollama_service = None
+        
+        use_ai = os.getenv("USE_AI", "true").lower() == "true"
+        
+        if use_ai:
+            # Try Groq first (preferred)
+            if GROQ_AVAILABLE:
+                try:
+                    self.groq_service = get_groq_service()
+                    self.use_groq = self.groq_service.is_available
+                except Exception:
+                    self.use_groq = False
+                    self.groq_service = None
+            
+            # Fallback to Ollama if Groq not available
+            if not self.use_groq and OLLAMA_AVAILABLE:
+                use_ollama = os.getenv("USE_OLLAMA", "false").lower() == "true"
+                if use_ollama:
+                    try:
+                        self.ollama_service = get_ollama_service()
+                        self.use_ollama = self.ollama_service.is_available
+                    except Exception:
+                        self.use_ollama = False
+                        self.ollama_service = None
     
     def create_bundle(
         self,
@@ -400,9 +421,44 @@ class ConciergeAgent:
         This makes the concierge explain WHY it chose certain deals,
         helping users understand the value proposition.
         
-        Uses Ollama for intelligent explanations if available.
+        Uses Groq (preferred) or Ollama for intelligent explanations if available.
         """
-        # Try Ollama first if available
+        # Try Groq first if available (preferred)
+        if self.use_groq and self.groq_service:
+            try:
+                bundle_info = {
+                    "total_price": bundle.total_price,
+                    "savings": bundle.savings
+                }
+                flights_info = [
+                    {
+                        "airline": f.airline,
+                        "price": f.discounted_price,
+                        "deal_score": f.deal_score,
+                        "tags": f.tags
+                    }
+                    for f in flights
+                ]
+                hotels_info = [
+                    {
+                        "name": h.name,
+                        "city": h.city,
+                        "price": h.discounted_price_per_night,
+                        "deal_score": h.deal_score,
+                        "tags": h.tags
+                    }
+                    for h in hotels
+                ]
+                
+                explanation = self.groq_service.generate_explanation(
+                    bundle_info, flights_info, hotels_info
+                )
+                if explanation and not explanation.startswith("I'm currently using"):
+                    return explanation
+            except Exception as e:
+                print(f"[ConciergeAgent] Groq explanation failed: {e}")
+        
+        # Fallback to Ollama if Groq not available
         if self.use_ollama and self.ollama_service:
             try:
                 bundle_info = {

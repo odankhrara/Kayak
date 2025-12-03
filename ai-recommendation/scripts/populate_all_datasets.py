@@ -19,26 +19,17 @@ def populate_from_csv_index():
     with Session(engine) as session:
         print("📊 Populating from indexed CSV data...")
         
-        # Get flights from CSV
-        flights = csv_service.search_flights(limit=200)
+        # Get flights from CSV - increased limit and removed duplicate check
+        flights = csv_service.search_flights(limit=500)
         print(f"Found {len(flights)} flights in CSV index")
         
         flight_count = 0
-        for flight in flights[:150]:
+        for flight in flights:  # Process all flights, no limit
             try:
                 if not flight.get('origin') or not flight.get('destination') or not flight.get('airline'):
                     continue
                 
-                existing = session.exec(
-                    select(FlightDeal).where(
-                        FlightDeal.airline == flight.get('airline'),
-                        FlightDeal.origin == flight.get('origin'),
-                        FlightDeal.destination == flight.get('destination')
-                    )
-                ).first()
-                
-                if existing:
-                    continue
+                # Removed duplicate check - import all flights
                 
                 price = float(flight.get('price', 500))
                 dep_time = datetime.now() + timedelta(days=random.randint(1, 60))
@@ -65,25 +56,17 @@ def populate_from_csv_index():
                 session.rollback()
                 continue
         
-        # Get hotels from CSV
-        hotels = csv_service.search_hotels(limit=200)
+        # Get hotels from CSV - increased limit and removed duplicate check
+        hotels = csv_service.search_hotels(limit=500)
         print(f"Found {len(hotels)} hotels in CSV index")
         
         hotel_count = 0
-        for hotel in hotels[:150]:
+        for hotel in hotels:  # Process all hotels, no limit
             try:
                 if not hotel.get('city') or not hotel.get('name'):
                     continue
                 
-                existing = session.exec(
-                    select(HotelDeal).where(
-                        HotelDeal.name == hotel.get('name'),
-                        HotelDeal.city == hotel.get('city')
-                    )
-                ).first()
-                
-                if existing:
-                    continue
+                # Removed duplicate check - import all hotels
                 
                 price = float(hotel.get('price', 100) or hotel.get('price_per_night', 100))
                 address = hotel.get('address', '') or f"{hotel.get('name')}, {hotel.get('city')}"
@@ -126,7 +109,7 @@ def populate_from_raw_csv():
             
             try:
                 print(f"  Processing {csv_file}...")
-                df = pd.read_csv(csv_path, nrows=500)  # Limit rows
+                df = pd.read_csv(csv_path, nrows=2000)  # Increased limit
                 
                 flight_count = 0
                 for _, row in df.iterrows():
@@ -138,17 +121,7 @@ def populate_from_raw_csv():
                         if not origin or not dest or len(origin) < 3 or len(dest) < 3:
                             continue
                         
-                        # Check if exists
-                        existing = session.exec(
-                            select(FlightDeal).where(
-                                FlightDeal.origin == origin,
-                                FlightDeal.destination == dest,
-                                FlightDeal.airline == airline
-                            )
-                        ).first()
-                        
-                        if existing:
-                            continue
+                        # Removed duplicate check - import all flights
                         
                         # Parse price
                         price_str = str(row.get("price", "500")).replace(",", "").replace("$", "").strip()
@@ -181,8 +154,10 @@ def populate_from_raw_csv():
                         session.add(flight_deal)
                         flight_count += 1
                         
-                        if flight_count >= 50:  # Limit per file
-                            break
+                        # Removed per-file limit - process all rows
+                        # Commit in batches for performance
+                        if flight_count % 100 == 0:
+                            session.commit()
                     except Exception as e:
                         continue
                 
@@ -201,30 +176,23 @@ def populate_from_raw_csv():
         
         hotel_count = 0
         for hotel_data in tokyo_hotels:
-            existing = session.exec(
-                select(HotelDeal).where(
-                    HotelDeal.name == hotel_data["name"],
-                    HotelDeal.city == hotel_data["city"]
-                )
-            ).first()
-            
-            if not existing:
-                hotel = HotelDeal(
-                    name=hotel_data["name"],
-                    city=hotel_data["city"],
-                    country=hotel_data["country"],
-                    address=f"{hotel_data['name']}, {hotel_data['city']}",
-                    original_price_per_night=hotel_data["price"] * 1.25,
-                    discounted_price_per_night=hotel_data["price"],
-                    discount_percentage=20.0,
-                    deal_score=random.uniform(0.8, 1.0),
-                    is_active=True,
-                    tags="pet-friendly,near-transit",
-                    available_rooms=random.randint(10, 25),
-                    rating=random.uniform(4.0, 5.0)
-                )
-                session.add(hotel)
-                hotel_count += 1
+            # Removed duplicate check - import all hotels
+            hotel = HotelDeal(
+                name=hotel_data["name"],
+                city=hotel_data["city"],
+                country=hotel_data["country"],
+                address=f"{hotel_data['name']}, {hotel_data['city']}",
+                original_price_per_night=hotel_data["price"] * 1.25,
+                discounted_price_per_night=hotel_data["price"],
+                discount_percentage=20.0,
+                deal_score=random.uniform(0.8, 1.0),
+                is_active=True,
+                tags="pet-friendly,near-transit",
+                available_rooms=random.randint(10, 25),
+                rating=random.uniform(4.0, 5.0)
+            )
+            session.add(hotel)
+            hotel_count += 1
         
         session.commit()
         if hotel_count > 0:
