@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  user-service:
+    build:
+      context: ../../
+      dockerfile: src/services/user-service/Dockerfile
+    container_name: kayak-user-service
+    ports:
+      - "8001:8001"
+    environment:
+      NODE_ENV: development
+      PORT: 8001
+      MONGODB_URI: mongodb://mongodb:27017/kayak
+      MYSQL_HOST: mysql
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+
   mysql:
     image: mysql:8.0
     container_name: kayak-mysql
