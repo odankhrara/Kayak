@@ -11,9 +11,13 @@ from app.deals_agent.normalization_worker import NormalizationWorker
 from app.deals_agent.deal_detector_worker import DealDetectorWorker
 from app.deals_agent.offer_tagger_worker import OfferTaggerWorker
 from app.deals_agent.event_emitter import EventEmitter
+from dotenv import load_dotenv
 import os
 import asyncio
 from contextlib import asynccontextmanager
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Global references for background tasks
 ingestion_worker = None
