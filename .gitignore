@@ -34,9 +34,6 @@ node_modules/
 .DS_Store
 
 # Data dumps
-<<<<<<< Current (Your changes)
-ai-recommendation/data/raw/
-=======
 # ai-recommendation/data/raw/  # Commented out to allow CSV files to be tracked
 # Note: Large CSV files (>100MB) should be added via Git LFS if needed
 
@@ -45,5 +42,6 @@ ai-recommendation/data/raw/
 # To use Git LFS: git lfs install && git lfs track "*.csv" && git add .gitattributes
 ai-recommendation/data/raw/flights.csv
 ai-recommendation/data/raw/reviews 2.csv
->>>>>>> Incoming (Background Agent changes)
+
+# Environment files with secrets
 ai-recommendation/.env
