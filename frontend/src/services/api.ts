@@ -1,8 +1,9 @@
 import axios, { AxiosError } from 'axios';
 import { toast } from 'react-toastify';
 
-// Base URL - can be changed via environment variable
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Base URL - use relative path for Vite proxy
+// In production, VITE_API_URL can be set to the actual API URL
+const BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Create axios instance
 const api = axios.create({

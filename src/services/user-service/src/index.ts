@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { errorHandler } from '@kayak/common/src/middleware/errorHandler'
 import userController from './controllers/userController'
+import imageController from './controllers/imageController'
 
 dotenv.config()
 
@@ -17,6 +18,7 @@ app.get('/health', (req, res) => {
 })
 
 app.use('/api/users', userController)
+app.use('/api/users', imageController)
 
 app.use(errorHandler)
 

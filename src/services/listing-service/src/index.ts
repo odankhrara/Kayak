@@ -5,6 +5,7 @@ import { errorHandler } from '@kayak/common/src/middleware/errorHandler'
 import flightController from './controllers/flightController'
 import hotelController from './controllers/hotelController'
 import carController from './controllers/carController'
+import favoriteController from './controllers/favoriteController'
 
 dotenv.config()
 
@@ -21,6 +22,7 @@ app.get('/health', (req, res) => {
 app.use('/api/listings/flights', flightController)
 app.use('/api/listings/hotels', hotelController)
 app.use('/api/listings/cars', carController)
+app.use('/api/listings/favorites', favoriteController)
 
 app.use(errorHandler)
 

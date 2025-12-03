@@ -15,7 +15,14 @@ router.use(
     onProxyReq: (proxyReq, req: any, res) => {
       console.log(`[Proxy] ${req.method} ${req.url} -> ${config.userServiceUrl}${req.url}`)
       
-      // Fix: Forward the request body properly
+      // Skip body processing for multipart/form-data (file uploads)
+      const contentType = req.headers['content-type'] || ''
+      if (contentType.includes('multipart/form-data')) {
+        console.log('[Proxy] Handling multipart/form-data request')
+        return
+      }
+      
+      // Forward JSON body for other requests
       if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
         const bodyData = JSON.stringify(req.body)
         proxyReq.setHeader('Content-Type', 'application/json')

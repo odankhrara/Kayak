@@ -10,6 +10,7 @@ export interface User {
   state?: string;
   zipCode?: string;
   profileImage?: string;
+  profileImageId?: string; // MongoDB ObjectId for profile picture
   createdAt?: string;
   updatedAt?: string;
   isAdmin?: boolean;
