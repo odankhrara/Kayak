@@ -16,6 +16,7 @@ services:
       MYSQL_USER: kayak
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: kayak
+      REDIS_URL: redis://redis:6379
     depends_on:
       - mysql
       - mongodb
