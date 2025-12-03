@@ -1,21 +1,10 @@
 import { Router, Request, Response } from 'express'
-import { createProducer } from '@kayak/common/src/kafka/kafkaClient'
+import { getProducer } from '@kayak/common/src/kafka/kafkaClient'
 import { KAFKA_TOPICS } from '@kayak/common/src/kafka/topics'
 
 const router = Router()
-let producer: ReturnType<typeof createProducer> | null = null
 
-// Initialize Kafka producer
-async function getProducer() {
-  if (!producer) {
-    producer = createProducer()
-    await producer.connect()
-    console.log('Kafka producer connected for tracking service')
-  }
-  return producer
-}
-
-// Initialize producer on startup
+// Initialize producer on startup (optional - will connect on first use)
 getProducer().catch(err => {
   console.error('Failed to initialize Kafka producer:', err)
 })

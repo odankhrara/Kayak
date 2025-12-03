@@ -8,7 +8,7 @@ interface RevenueByCityChartProps {
 export function RevenueByCityChart({ data }: RevenueByCityChartProps) {
   return (
     <div className="chart-container">
-      <h3>Revenue by City</h3>
+      <h3>Revenue by Flights</h3>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />

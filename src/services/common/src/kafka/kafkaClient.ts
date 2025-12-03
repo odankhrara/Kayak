@@ -35,6 +35,14 @@ export async function getProducer(): Promise<Producer> {
   return producerInstance
 }
 
+/**
+ * Create a Kafka consumer instance (synchronous, not connected)
+ * Use this when you want to manage connection lifecycle yourself
+ */
+export function createConsumer(groupId: string): Consumer {
+  return kafka.consumer({ groupId })
+}
+
 export async function getConsumer(groupId: string): Promise<Consumer> {
   if (consumerInstances.has(groupId)) {
     return consumerInstances.get(groupId)!

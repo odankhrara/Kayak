@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plane, Hotel, Car, Search, TrendingUp, Shield, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { toast } from 'react-toastify';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Select from '../components/common/Select';
@@ -90,8 +89,18 @@ const Home = () => {
             backgroundImage: `url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=2400&h=1600&q=95&fit=crop&fm=webp')`,
           }}
         >
-          {/* Subtle overlay for text readability only */}
-          <div className="absolute inset-0 bg-gradient-to-b from-blue-900/10 via-transparent to-transparent"></div>
+          {/* Overlay to ensure text readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-transparent to-purple-900/10"></div>
+        </div>
+        
+        {/* Light overlay to soften and make content stand out */}
+        <div className="absolute inset-0 bg-white/25 backdrop-blur-[2px]"></div>
+        
+        {/* Animated gradient overlay for depth */}
+        <div className="absolute inset-0">
+          <div className="absolute top-20 left-20 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-float"></div>
+          <div className="absolute bottom-20 right-20 w-[500px] h-[500px] bg-cyan-300/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+          <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-teal-400/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '4s' }}></div>
         </div>
 
         <div className="container mx-auto px-4 relative z-10">
@@ -182,16 +191,6 @@ const Home = () => {
                 <span>Cars</span>
               </button>
             </div>
-
-            {isAdmin && (
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/admin/dashboard')}
-                className="md:self-end"
-              >
-                Dashboard
-              </Button>
-            )}
           </div>
 
             {/* Flight Search Form */}

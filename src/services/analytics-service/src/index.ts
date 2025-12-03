@@ -26,31 +26,30 @@ app.use('/api/analytics', analyticsController)
 // Legacy analytics from database
 const analyticsService = new AnalyticsService()
 
-// Initialize Kafka consumers
-const clickEventsConsumer = new ClickEventsConsumer()
-const userTrackingConsumer = new UserTrackingConsumer()
+// Initialize Kafka consumers (will start after server is up)
+let clickEventsConsumer: ClickEventsConsumer | null = null
+let userTrackingConsumer: UserTrackingConsumer | null = null
 
-// Start consumers
-clickEventsConsumer.start().catch(err => {
-  console.error('Failed to start click events consumer:', err)
-})
-
-userTrackingConsumer.start().catch(err => {
-  console.error('Failed to start user tracking consumer:', err)
-})
+try {
+  clickEventsConsumer = new ClickEventsConsumer()
+  userTrackingConsumer = new UserTrackingConsumer()
+} catch (err) {
+  console.error('Failed to initialize Kafka consumers:', err)
+  console.warn('⚠️  Continuing without Kafka consumers...')
+}
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...')
-  await clickEventsConsumer.stop()
-  await userTrackingConsumer.stop()
+  if (clickEventsConsumer) await clickEventsConsumer.stop().catch(console.error)
+  if (userTrackingConsumer) await userTrackingConsumer.stop().catch(console.error)
   process.exit(0)
 })
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully...')
-  await clickEventsConsumer.stop()
-  await userTrackingConsumer.stop()
+  if (clickEventsConsumer) await clickEventsConsumer.stop().catch(console.error)
+  if (userTrackingConsumer) await userTrackingConsumer.stop().catch(console.error)
   process.exit(0)
 })
 
@@ -153,6 +152,19 @@ app.use(errorHandler)
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`📊 Analytics Service running on port ${PORT}`)
   console.log(`✅ Real-time analytics API: http://localhost:${PORT}/api/analytics/today`)
+  
+  // Start Kafka consumers after server is up
+  if (clickEventsConsumer) {
+    clickEventsConsumer.start().catch(err => {
+      console.error('Failed to start click events consumer:', err)
+    })
+  }
+  
+  if (userTrackingConsumer) {
+    userTrackingConsumer.start().catch(err => {
+      console.error('Failed to start user tracking consumer:', err)
+    })
+  }
 })
 
 // Start Kafka consumer in background

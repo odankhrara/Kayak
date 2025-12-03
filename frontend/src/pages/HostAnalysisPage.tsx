@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
+import { useAuthStore } from '../store/authStore'
 import { adminApi } from '../api/adminApi'
 import { ClicksPerPageChart } from '../components/charts/ClicksPerPageChart'
 import { PropertyClicksChart } from '../components/charts/PropertyClicksChart'
@@ -9,11 +10,12 @@ import { BiddingTraceDiagram } from '../components/trace/BiddingTraceDiagram'
 import './HostAnalysisPage.css'
 
 export default function HostAnalysisPage() {
-  const { user, setLoading, setError } = useStore()
+  const { setLoading, setError } = useStore()
+  const { user } = useAuthStore()
   const [clicksPerPage, setClicksPerPage] = useState<any[]>([])
   const [propertyClicks, setPropertyClicks] = useState<any[]>([])
   const [leastSeenAreas, setLeastSeenAreas] = useState<any[]>([])
-  const [propertyReviews, setPropertyReviews] = useState<any[]>([])
+  //const [propertyReviews, setPropertyReviews] = useState<any[]>([])
   const [userTraces, setUserTraces] = useState<any[]>([])
   const [biddingTraces, setBiddingTraces] = useState<any[]>([])
 
@@ -27,7 +29,7 @@ export default function HostAnalysisPage() {
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('')
 
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (user && user.isAdmin) {
       loadAllData()
     }
   }, [user])
@@ -39,7 +41,7 @@ export default function HostAnalysisPage() {
         loadClicksPerPage(),
         loadPropertyClicks(),
         loadLeastSeenAreas(),
-        loadPropertyReviews(),
+        //loadPropertyReviews(),
         loadUserTraces(),
         loadBiddingTraces()
       ])
@@ -54,6 +56,7 @@ export default function HostAnalysisPage() {
     try {
       const data = await adminApi.getClicksPerPage(startDate || undefined, endDate || undefined)
       setClicksPerPage(data)
+      console.log('clicksPerPage', clicksPerPage)
     } catch (error) {
       console.error('Failed to load clicks per page:', error)
     }
@@ -63,6 +66,7 @@ export default function HostAnalysisPage() {
     try {
       const data = await adminApi.getPropertyClicks(startDate || undefined, endDate || undefined)
       setPropertyClicks(data)
+      console.log('propertyClicks', propertyClicks)
     } catch (error) {
       console.error('Failed to load property clicks:', error)
     }
@@ -72,6 +76,7 @@ export default function HostAnalysisPage() {
     try {
       const data = await adminApi.getLeastSeenAreas(startDate || undefined, endDate || undefined)
       setLeastSeenAreas(data)
+      console.log('leastSeenAreas', leastSeenAreas)
     } catch (error) {
       console.error('Failed to load least seen areas:', error)
     }
@@ -82,7 +87,7 @@ export default function HostAnalysisPage() {
       const data = await adminApi.getPropertyReviews(
         propertyType ? (propertyType as 'hotel' | 'flight' | 'car') : undefined
       )
-      setPropertyReviews(data)
+      //setPropertyReviews(data)
     } catch (error) {
       console.error('Failed to load property reviews:', error)
     }
@@ -96,6 +101,7 @@ export default function HostAnalysisPage() {
         traceState || undefined
       )
       setUserTraces(data)
+      console.log('userTraces', userTraces)
     } catch (error) {
       console.error('Failed to load user traces:', error)
     }
@@ -105,6 +111,7 @@ export default function HostAnalysisPage() {
     try {
       const data = await adminApi.getBiddingTrace(selectedPropertyId || undefined)
       setBiddingTraces(data)
+      console.log('biddingTraces', biddingTraces)
     } catch (error) {
       console.error('Failed to load bidding traces:', error)
     }
@@ -114,8 +121,10 @@ export default function HostAnalysisPage() {
     loadAllData()
   }
 
-  if (user?.role !== 'admin') {
+  if (user && !user.isAdmin)  {
     return <div className="loading">Access denied. Admin access required.</div>
+  } else {
+    return <div className="loading">Loading...</div>
   }
 
   return (

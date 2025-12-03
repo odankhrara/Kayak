@@ -65,4 +65,3 @@ export class ClickEventsConsumer {
     console.log('Click events consumer stopped')
   }
 }
-
