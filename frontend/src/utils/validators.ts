@@ -144,3 +144,115 @@ export const validateDateRange = (startDate: string, endDate: string): boolean =
   return end > start;
 };
 
+// City-State mapping for validation
+const CITY_STATE_MAP: { [key: string]: string } = {
+  // California
+  'San Francisco': 'CA',
+  'Los Angeles': 'CA',
+  'San Diego': 'CA',
+  'San Jose': 'CA',
+  'Sacramento': 'CA',
+  'Oakland': 'CA',
+  'Fresno': 'CA',
+  
+  // New York
+  'New York': 'NY',
+  'Buffalo': 'NY',
+  'Rochester': 'NY',
+  'Albany': 'NY',
+  'Syracuse': 'NY',
+  
+  // Texas
+  'Houston': 'TX',
+  'Dallas': 'TX',
+  'Austin': 'TX',
+  'San Antonio': 'TX',
+  'Fort Worth': 'TX',
+  'El Paso': 'TX',
+  
+  // Florida
+  'Miami': 'FL',
+  'Tampa': 'FL',
+  'Orlando': 'FL',
+  'Jacksonville': 'FL',
+  'Tallahassee': 'FL',
+  
+  // Illinois
+  'Chicago': 'IL',
+  'Springfield': 'IL',
+  'Naperville': 'IL',
+  
+  // Pennsylvania
+  'Philadelphia': 'PA',
+  'Pittsburgh': 'PA',
+  'Harrisburg': 'PA',
+  
+  // Arizona
+  'Phoenix': 'AZ',
+  'Tucson': 'AZ',
+  'Mesa': 'AZ',
+  
+  // Washington
+  'Seattle': 'WA',
+  'Spokane': 'WA',
+  'Tacoma': 'WA',
+  
+  // Massachusetts
+  'Boston': 'MA',
+  'Cambridge': 'MA',
+  'Worcester': 'MA',
+  
+  // Colorado
+  'Denver': 'CO',
+  'Colorado Springs': 'CO',
+  'Aurora': 'CO',
+  
+  // Michigan
+  'Detroit': 'MI',
+  'Grand Rapids': 'MI',
+  'Lansing': 'MI',
+  
+  // Georgia
+  'Atlanta': 'GA',
+  'Savannah': 'GA',
+  'Augusta': 'GA',
+  
+  // Nevada
+  'Las Vegas': 'NV',
+  'Reno': 'NV',
+  'Henderson': 'NV',
+  
+  // Oregon
+  'Portland': 'OR',
+  'Eugene': 'OR',
+  'Salem': 'OR',
+  
+  // Alabama
+  'Birmingham': 'AL',
+  'Montgomery': 'AL',
+  'Mobile': 'AL',
+  'Huntsville': 'AL',
+};
+
+// Validate city-state combination
+export const validateCityState = (city: string, state: string): boolean => {
+  if (!city || !state) {
+    return true; // Allow if either is empty (other validators will handle required fields)
+  }
+  
+  const expectedState = CITY_STATE_MAP[city];
+  
+  // If city is not in our map, allow it (we can't validate all cities)
+  if (!expectedState) {
+    return true;
+  }
+  
+  // If city is in our map, validate that state matches
+  return expectedState === state.toUpperCase();
+};
+
+// Get correct state for a city
+export const getStateForCity = (city: string): string | null => {
+  return CITY_STATE_MAP[city] || null;
+};
+

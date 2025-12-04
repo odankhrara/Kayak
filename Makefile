@@ -98,16 +98,16 @@ start: db-start db-wait start-backend start-frontend
 	@echo "📍 Access URLs:"
 	@echo "   Frontend:        http://localhost:3000"
 	@echo "   API Gateway:     http://localhost:4000"
-	@echo "   MySQL:          localhost:3306"
+	@echo "   MySQL:          localhost:3307 (Docker)"
 	@echo "   MongoDB:        localhost:27017"
+	@echo "   Redis:          localhost:6379"
 	@echo ""
 	@echo "Run 'make logs' to see logs or 'make status' to check status"
 
 start-backend:
 	@echo "🚀 Starting backend services..."
 	@mkdir -p src/logs
-	@export MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_USER=root MYSQL_PASSWORD=password MYSQL_DATABASE=kayak && \
-	cd src && ./start-backend.sh || true
+	@cd src && ./start-backend.sh || true
 	@sleep 3
 	@echo "✅ Backend services started"
 
@@ -163,19 +163,21 @@ dev:
 # ============================================================================
 
 db-start:
-	@echo "🗄️  Starting databases..."
-	@cd src/infra && docker-compose up -d mysql mongodb
-	@echo "⏳ Databases starting..."
+	@echo "🗄️  Starting databases and infrastructure..."
+	@cd src/infra && docker-compose up -d
+	@echo "⏳ Infrastructure starting (MySQL, MongoDB, Redis, Kafka, Zookeeper)..."
 
 db-stop:
-	@echo "🛑 Stopping databases..."
-	@cd src/infra && docker-compose stop mysql mongodb
-	@echo "✅ Databases stopped"
+	@echo "🛑 Stopping infrastructure..."
+	@cd src/infra && docker-compose stop
+	@echo "✅ Infrastructure stopped"
 
 db-wait:
-	@echo "⏳ Waiting for databases to be ready (60s)..."
-	@sleep 60
-	@echo "✅ Databases should be ready"
+	@echo "⏳ Waiting for databases to be healthy..."
+	@./scripts/wait-for-health.sh kayak-mysql 30
+	@./scripts/wait-for-health.sh kayak-mongodb 30
+	@./scripts/wait-for-health.sh kayak-redis 15
+	@echo "✅ All databases are healthy and ready!"
 
 db-seed:
 	@echo "🌱 Seeding database with test data..."
@@ -223,6 +225,8 @@ test-health:
 	@curl -s http://localhost:8003/health | grep -q "ok" && echo "✅" || echo "❌"
 	@echo -n "Analytics Service (8004): "
 	@curl -s http://localhost:8004/health | grep -q "ok" && echo "✅" || echo "❌"
+	@echo -n "Admin Service (8006): "
+	@curl -s http://localhost:8006/health | grep -q "ok" && echo "✅" || echo "❌"
 	@echo -n "Frontend (3000): "
 	@curl -s http://localhost:3000 > /dev/null && echo "✅" || echo "❌"
 
@@ -253,7 +257,7 @@ status:
 	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep kayak || echo "No containers running"
 	@echo ""
 	@echo "⚙️  Node Processes:"
-	@ps aux | grep -E "node.*(api-gateway|user-service|listing-service|booking-billing|analytics|vite)" | grep -v grep || echo "No Node.js processes running"
+	@ps aux | grep -E "node.*(api-gateway|user-service|listing-service|booking-billing|analytics|admin-service|vite)" | grep -v grep || echo "No Node.js processes running"
 	@echo ""
 	@echo "🌐 Port Usage:"
 	@lsof -i :3000 -sTCP:LISTEN | tail -n +2 | awk '{print "Port 3000 (Frontend): ✅"}' || echo "Port 3000 (Frontend): ❌"
@@ -261,6 +265,8 @@ status:
 	@lsof -i :8001 -sTCP:LISTEN | tail -n +2 | awk '{print "Port 8001 (User Service): ✅"}' || echo "Port 8001 (User Service): ❌"
 	@lsof -i :8002 -sTCP:LISTEN | tail -n +2 | awk '{print "Port 8002 (Listing Service): ✅"}' || echo "Port 8002 (Listing Service): ❌"
 	@lsof -i :8003 -sTCP:LISTEN | tail -n +2 | awk '{print "Port 8003 (Booking Service): ✅"}' || echo "Port 8003 (Booking Service): ❌"
+	@lsof -i :8004 -sTCP:LISTEN | tail -n +2 | awk '{print "Port 8004 (Analytics Service): ✅"}' || echo "Port 8004 (Analytics Service): ❌"
+	@lsof -i :8006 -sTCP:LISTEN | tail -n +2 | awk '{print "Port 8006 (Admin Service): ✅"}' || echo "Port 8006 (Admin Service): ❌"
 
 health: test-health
 
@@ -279,6 +285,9 @@ logs-listing:
 
 logs-booking:
 	@tail -f src/logs/booking-billing-service.log
+
+logs-admin:
+	@tail -f src/logs/admin-service.log
 
 logs-frontend:
 	@tail -f src/logs/frontend.log
@@ -359,7 +368,7 @@ prod: build
 
 ports:
 	@echo "🔌 Port Usage:"
-	@lsof -i -P -n | grep LISTEN | grep -E ":(3000|4000|8001|8002|8003|8004|3306|27017)" || echo "No ports in use"
+	@lsof -i -P -n | grep LISTEN | grep -E ":(3000|4000|8001|8002|8003|8004|8006|3306|27017)" || echo "No ports in use"
 
 kill-ports:
 	@echo "⚠️  Killing all processes on Kayak ports..."
@@ -369,6 +378,7 @@ kill-ports:
 	@-lsof -ti:8002 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:8003 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:8004 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti:8006 | xargs kill -9 2>/dev/null || true
 	@echo "✅ Ports cleared"
 
 version:
@@ -379,6 +389,56 @@ version:
 	@echo "npm: $$(npm --version)"
 	@echo "Docker: $$(docker --version)"
 	@echo "Docker Compose: $$(docker-compose --version)"
+
+# ============================================================================
+# FULL RESET - Nuclear Option
+# ============================================================================
+
+full-reset:
+	@echo "╔═══════════════════════════════════════════════════════════════╗"
+	@echo "║            ⚠️  FULL SYSTEM RESET - NUCLEAR OPTION ⚠️          ║"
+	@echo "╚═══════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "This will:"
+	@echo "  1. Stop all services"
+	@echo "  2. Kill all ports"
+	@echo "  3. Remove all Docker containers and volumes"
+	@echo "  4. Clean logs"
+	@echo "  5. Rebuild common module"
+	@echo "  6. Run full setup (DB + seed)"
+	@echo "  7. Start all services fresh"
+	@echo ""
+	@echo "🛑 Stopping all services..."
+	@-make stop 2>/dev/null || true
+	@echo ""
+	@echo "⚠️  Killing all port processes..."
+	@make kill-ports
+	@echo ""
+	@echo "🗑️  Removing Docker containers and volumes..."
+	@-cd src/infra && docker-compose down -v --remove-orphans 2>/dev/null || true
+	@-docker volume prune -f 2>/dev/null || true
+	@echo ""
+	@echo "🧹 Cleaning logs..."
+	@-rm -rf src/logs/*.log 2>/dev/null || true
+	@-mkdir -p src/logs
+	@echo ""
+	@echo "🔨 Building common module..."
+	@cd src/services/common && npm run build
+	@echo ""
+	@echo "📦 Running full setup..."
+	@make setup
+	@echo ""
+	@echo "🚀 Starting all services..."
+	@make start
+	@echo ""
+	@echo "╔═══════════════════════════════════════════════════════════════╗"
+	@echo "║              ✅ FULL RESET COMPLETE! ✅                        ║"
+	@echo "╚═══════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@make status
+
+# Alias for full-reset
+reset-all: full-reset
 
 # Quick aliases
 s: start

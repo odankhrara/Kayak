@@ -65,6 +65,65 @@ export class UserService {
   }
 
   /**
+   * Validate phone number format (US)
+   * Accepts: XXX-XXX-XXXX, (XXX) XXX-XXXX, XXX.XXX.XXXX, or 10 digits
+   */
+  private validatePhone(phone: string): void {
+    if (!phone || phone.trim() === '') {
+      return // Phone is optional
+    }
+    
+    // Remove all non-digit characters
+    const digitsOnly = phone.replace(/\D/g, '')
+    
+    // Check if it's exactly 10 digits
+    if (digitsOnly.length !== 10) {
+      throw new Error('Invalid phone number. Must be 10 digits (e.g., 555-123-4567 or 5551234567)')
+    }
+    
+    // Check if it's all numeric after removing formatting
+    if (!/^\d{10}$/.test(digitsOnly)) {
+      throw new Error('Phone number must contain only numbers')
+    }
+  }
+
+  /**
+   * Validate city-state combination
+   */
+  private validateCityState(city: string, state: string): void {
+    if (!city || !state) {
+      return // Skip if either is missing
+    }
+
+    // Map of major US cities to their states
+    const cityStateMap: { [key: string]: string } = {
+      'San Francisco': 'CA', 'Los Angeles': 'CA', 'San Diego': 'CA', 'San Jose': 'CA',
+      'Sacramento': 'CA', 'Oakland': 'CA', 'Fresno': 'CA',
+      'New York': 'NY', 'Buffalo': 'NY', 'Rochester': 'NY', 'Albany': 'NY', 'Syracuse': 'NY',
+      'Houston': 'TX', 'Dallas': 'TX', 'Austin': 'TX', 'San Antonio': 'TX', 'Fort Worth': 'TX', 'El Paso': 'TX',
+      'Miami': 'FL', 'Tampa': 'FL', 'Orlando': 'FL', 'Jacksonville': 'FL', 'Tallahassee': 'FL',
+      'Chicago': 'IL', 'Springfield': 'IL', 'Naperville': 'IL',
+      'Philadelphia': 'PA', 'Pittsburgh': 'PA', 'Harrisburg': 'PA',
+      'Phoenix': 'AZ', 'Tucson': 'AZ', 'Mesa': 'AZ',
+      'Seattle': 'WA', 'Spokane': 'WA', 'Tacoma': 'WA',
+      'Boston': 'MA', 'Cambridge': 'MA', 'Worcester': 'MA',
+      'Denver': 'CO', 'Colorado Springs': 'CO', 'Aurora': 'CO',
+      'Detroit': 'MI', 'Grand Rapids': 'MI', 'Lansing': 'MI',
+      'Atlanta': 'GA', 'Savannah': 'GA', 'Augusta': 'GA',
+      'Las Vegas': 'NV', 'Reno': 'NV', 'Henderson': 'NV',
+      'Portland': 'OR', 'Eugene': 'OR', 'Salem': 'OR',
+      'Birmingham': 'AL', 'Montgomery': 'AL', 'Mobile': 'AL', 'Huntsville': 'AL'
+    }
+
+    const expectedState = cityStateMap[city]
+    
+    // If city is in our map, validate the state matches
+    if (expectedState && expectedState !== state.toUpperCase()) {
+      throw new Error(`${city} is located in ${expectedState}, not ${state}. Please correct the state.`)
+    }
+  }
+
+  /**
    * Register a new user
    */
   async register(userData: {
@@ -85,11 +144,17 @@ export class UserService {
       this.validateEmail(userData.email)
       this.validatePassword(userData.password)
       
+      if (userData.phone) {
+        this.validatePhone(userData.phone)
+      }
       if (userData.state) {
         this.validateState(userData.state)
       }
       if (userData.zipCode) {
         this.validateZipCode(userData.zipCode)
+      }
+      if (userData.city && userData.state) {
+        this.validateCityState(userData.city, userData.state)
       }
 
       // Hash password
@@ -228,6 +293,9 @@ export class UserService {
       if (updates.email) {
         this.validateEmail(updates.email)
       }
+      if (updates.phone) {
+        this.validatePhone(updates.phone)
+      }
       if (updates.state) {
         this.validateState(updates.state)
       }
@@ -240,6 +308,13 @@ export class UserService {
         const hashedPassword = await bcrypt.hash(updates.password, 10)
         updates = { ...updates, password: undefined } as any
         ;(updates as any).hashedPassword = hashedPassword
+      }
+      
+      // Validate city-state combination
+      const cityToValidate = updates.city || existingUser.city
+      const stateToValidate = updates.state || existingUser.state
+      if (cityToValidate && stateToValidate) {
+        this.validateCityState(cityToValidate, stateToValidate)
       }
 
       // Update user

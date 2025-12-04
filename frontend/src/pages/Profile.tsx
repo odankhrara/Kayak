@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { User, Mail, Phone, MapPin, Save } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Save, Camera, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../services/auth.service';
@@ -10,11 +10,18 @@ import Input from '../components/common/Input';
 import Select from '../components/common/Select';
 import Card from '../components/common/Card';
 import { US_STATES } from '../utils/constants';
-import { validateEmail, validateZipCode, validateState } from '../utils/validators';
+import { validateEmail, validateZipCode, validateState, validatePhoneNumber } from '../utils/validators';
+import axios from 'axios';
 
 const Profile = () => {
   const { user, updateUser } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(
+    user?.profileImageId ? `/api/users/profile-image/${user.profileImageId}` : null
+  );
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -48,6 +55,97 @@ const Profile = () => {
     }
   };
 
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload image
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('userId', user!.userId);
+
+      const response = await axios.post(
+        '/api/users/upload-profile-image',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      const { imageId, imageUrl } = response.data.data;
+      setProfileImage(imageUrl);
+      setImagePreview(null);
+      
+      // Update user in store
+      updateUser({
+        ...user!,
+        profileImageId: imageId,
+      });
+
+      toast.success('Profile picture updated! ✨');
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      toast.error(error.response?.data?.error || 'Failed to upload image');
+      setImagePreview(null);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!user?.profileImageId) return;
+
+    setUploadingImage(true);
+    try {
+      await axios.delete('/api/users/profile-image', {
+        data: { userId: user.userId },
+      });
+
+      setProfileImage(null);
+      setImagePreview(null);
+      
+      // Update user in store
+      updateUser({
+        ...user,
+        profileImageId: undefined,
+      });
+
+      toast.success('Profile picture removed');
+    } catch (error: any) {
+      console.error('Error removing image:', error);
+      toast.error('Failed to remove image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -64,9 +162,62 @@ const Profile = () => {
           <div className="lg:col-span-1">
             <Card>
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 mb-4">
-                  <User className="w-12 h-12 text-white" />
+                {/* Profile Image */}
+                <div className="relative inline-block mb-4">
+                  <div
+                    onClick={handleImageClick}
+                    className="relative w-24 h-24 rounded-full overflow-hidden cursor-pointer group"
+                  >
+                    {imagePreview || profileImage ? (
+                      <img
+                        src={imagePreview || profileImage!}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+                        <User className="w-12 h-12 text-white" />
+                      </div>
+                    )}
+                    
+                    {/* Upload Overlay */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      {uploadingImage ? (
+                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <Camera className="w-6 h-6 text-white" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Remove Button */}
+                  {(profileImage || imagePreview) && !uploadingImage && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveImage();
+                      }}
+                      className="absolute -top-1 -right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                      title="Remove picture"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Hidden File Input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
                 </div>
+
+                <p className="text-xs text-gray-500 mb-4">
+                  Click to upload photo (max 5MB)
+                </p>
+
                 <h2 className="text-2xl font-bold mb-1">
                   {user.firstName} {user.lastName}
                 </h2>
@@ -134,7 +285,9 @@ const Profile = () => {
                   icon={<Phone className="w-5 h-5" />}
                   placeholder="(123) 456-7890"
                   error={errors.phone?.message}
-                  {...register('phone')}
+                  {...register('phone', {
+                    validate: (value) => !value || validatePhoneNumber(value) || 'Invalid phone number format (e.g., 555-123-4567)',
+                  })}
                 />
 
                 <Input

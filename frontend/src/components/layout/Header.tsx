@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Plane, Menu, X, User, LogOut, Calendar, Bot } from 'lucide-react';
+import { Plane, Menu, X, User, LogOut, Calendar, Bot, Heart } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -83,7 +83,17 @@ const Header = () => {
                   onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                   className="flex items-center space-x-2 glass px-4 py-2 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all"
                 >
-                  <User className="w-5 h-5" />
+                  {user?.profileImageId ? (
+                    <img
+                      src={`/api/users/profile-image/${user.profileImageId}`}
+                      alt={user.firstName}
+                      className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+                      <User className="w-4 h-4 text-white" />
+                    </div>
+                  )}
                   <span className="font-medium">{user?.firstName}</span>
                 </button>
 
@@ -105,6 +115,14 @@ const Header = () => {
                     >
                       <Calendar className="w-4 h-4" />
                       <span>My Bookings</span>
+                    </Link>
+                    <Link
+                      to="/my-trips"
+                      onClick={() => setProfileMenuOpen(false)}
+                      className="flex items-center space-x-2 px-4 py-3 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
+                    >
+                      <Heart className="w-4 h-4" />
+                      <span>My Trips</span>
                     </Link>
                     <Link
                       to="/ai-assistant"
@@ -174,13 +192,22 @@ const Header = () => {
               Cars
             </Link>
             {isAuthenticated && (
-              <Link
-                to="/my-bookings"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-4 py-3 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
-              >
-                My Bookings
-              </Link>
+              <>
+                <Link
+                  to="/my-bookings"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-3 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
+                >
+                  My Bookings
+                </Link>
+                <Link
+                  to="/my-trips"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-3 rounded-xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
+                >
+                  My Trips
+                </Link>
+              </>
             )}
             {isAuthenticated && (user?.isAdmin || user?.role === 'admin') && (
               <Link

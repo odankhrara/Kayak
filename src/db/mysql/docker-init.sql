@@ -6,6 +6,8 @@ CREATE DATABASE IF NOT EXISTS kayak CHARACTER SET utf8mb4 COLLATE utf8mb4_unicod
 USE kayak;
 
 -- Drop tables if they exist (for clean initialization)
+DROP TABLE IF EXISTS shared_trips;
+DROP TABLE IF EXISTS favorites;
 DROP TABLE IF EXISTS flight_booking_details;
 DROP TABLE IF EXISTS hotel_amenities;
 DROP TABLE IF EXISTS hotel_rooms;
@@ -376,7 +378,38 @@ VALUES
 -- ('CAR009', 'truck', 'Enterprise', 'Ford F-150', 2024, 'automatic', 6, 95.99, 'Denver, CO', 4.6, 23, TRUE),
 -- ('CAR010', 'luxury', 'Hertz', 'Mercedes E-Class', 2024, 'automatic', 5, 150.99, 'New York, NY', 4.9, 12, TRUE);
 
+-- ============================================
+-- 11. FAVORITES TABLE
+-- ============================================
+CREATE TABLE favorites (
+    favorite_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(11) NOT NULL,
+    item_type ENUM('flight', 'hotel', 'car') NOT NULL,
+    item_id VARCHAR(50) NOT NULL COMMENT 'Can be flight_id, hotel_id, car_id',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_user_item (user_id, item_type, item_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 12. SHARED_TRIPS TABLE
+-- ============================================
+CREATE TABLE shared_trips (
+    share_token VARCHAR(36) PRIMARY KEY COMMENT 'UUID for sharing',
+    user_id VARCHAR(11) NOT NULL,
+    favorite_id INT NOT NULL,
+    view_count INT DEFAULT 0,
+    expires_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (favorite_id) REFERENCES favorites(favorite_id) ON DELETE CASCADE,
+    INDEX idx_user_share (user_id, share_token),
+    INDEX idx_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Success message
-SELECT 'Database schema created successfully! Tables: users, flights, hotels, hotel_rooms, hotel_amenities, cars, bookings, flight_booking_details, billing, admin, credit_cards' AS status;
+SELECT 'Database schema created successfully! Tables: users, flights, hotels, hotel_rooms, hotel_amenities, cars, bookings, flight_booking_details, billing, admin, credit_cards, favorites, shared_trips' AS status;
 SELECT 'NO sample data inserted - seed-data.js will populate all data' AS seed_status;
 

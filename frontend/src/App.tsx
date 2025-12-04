@@ -22,6 +22,7 @@ import AdminBillingPage from './pages/AdminBillingPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import HostAnalysisPage from './pages/HostAnalysisPage';
 import AIAssistantPage from './pages/AIAssistantPage';
+import MyTrips from './pages/MyTrips';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -124,6 +125,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AIAssistantPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/my-trips"
+              element={
+                <ProtectedRoute>
+                  <MyTrips />
                 </ProtectedRoute>
               }
             />

@@ -1,15 +1,20 @@
 /**
- * Kayak Travel Booking System - Seed Data Generator
+ * Kayak Travel Booking System - Enhanced Seed Data Generator
  * 
  * Generates test data for:
  * - 1000 users
- * - 500 flights
- * - 200 hotels (with rooms and amenities)
- * - 200 cars
+ * - 1200 flights (covering more routes and dates)
+ * - 1000 hotels (with rooms and amenities across many cities)
+ * - 1000 cars (available in major cities)
  * - 2000 bookings
  * - 2000 billing records
  * 
- * Usage: node db/seed-data.js
+ * Enhanced Features:
+ * - Dates within next 3 months (90 days)
+ * - More diverse routes and locations
+ * - Better coverage for random searches
+ * 
+ * Usage: node src/db/seed-data.js
  */
 
 const mysql = require('mysql2/promise');
@@ -28,24 +33,97 @@ const MYSQL_CONFIG = {
 const MONGO_URL = process.env.MONGO_URL || 'mongodb://localhost:27017';
 const MONGO_DB = 'kayak';
 
-// Helper functions for generating realistic data
-const states = ['CA', 'NY', 'TX', 'FL', 'IL', 'PA', 'OH', 'GA', 'NC', 'MI', 'NJ', 'VA', 'WA', 'AZ', 'MA', 'TN', 'IN', 'MO', 'MD', 'WI'];
+// Enhanced data arrays with more options
+const states = ['CA', 'NY', 'TX', 'FL', 'IL', 'PA', 'OH', 'GA', 'NC', 'MI', 'NJ', 'VA', 'WA', 'AZ', 'MA', 'TN', 'IN', 'MO', 'MD', 'WI', 'CO', 'NV', 'OR', 'MN'];
+
 const cities = {
-  'CA': ['San Jose', 'San Francisco', 'Los Angeles', 'San Diego', 'Sacramento'],
-  'NY': ['New York', 'Buffalo', 'Rochester', 'Albany', 'Syracuse'],
-  'TX': ['Houston', 'Dallas', 'Austin', 'San Antonio', 'Fort Worth'],
-  'FL': ['Miami', 'Orlando', 'Tampa', 'Jacksonville', 'Tallahassee'],
-  'IL': ['Chicago', 'Aurora', 'Naperville', 'Joliet', 'Rockford']
+  'CA': ['San Jose', 'San Francisco', 'Los Angeles', 'San Diego', 'Sacramento', 'Oakland', 'Fresno', 'Long Beach', 'Anaheim'],
+  'NY': ['New York', 'Buffalo', 'Rochester', 'Albany', 'Syracuse', 'Yonkers'],
+  'TX': ['Houston', 'Dallas', 'Austin', 'San Antonio', 'Fort Worth', 'El Paso', 'Arlington'],
+  'FL': ['Miami', 'Orlando', 'Tampa', 'Jacksonville', 'Tallahassee', 'Fort Lauderdale', 'St. Petersburg'],
+  'IL': ['Chicago', 'Aurora', 'Naperville', 'Joliet', 'Rockford', 'Springfield'],
+  'PA': ['Philadelphia', 'Pittsburgh', 'Harrisburg', 'Allentown'],
+  'WA': ['Seattle', 'Spokane', 'Tacoma', 'Vancouver', 'Bellevue'],
+  'AZ': ['Phoenix', 'Tucson', 'Mesa', 'Chandler', 'Scottsdale'],
+  'MA': ['Boston', 'Cambridge', 'Worcester', 'Springfield', 'Lowell'],
+  'CO': ['Denver', 'Colorado Springs', 'Aurora', 'Fort Collins'],
+  'NV': ['Las Vegas', 'Reno', 'Henderson', 'Paradise'],
+  'OR': ['Portland', 'Eugene', 'Salem', 'Gresham'],
+  'GA': ['Atlanta', 'Augusta', 'Columbus', 'Savannah'],
+  'NC': ['Charlotte', 'Raleigh', 'Greensboro', 'Durham'],
+  'MI': ['Detroit', 'Grand Rapids', 'Warren', 'Sterling Heights']
 };
 
-const airports = ['SFO', 'LAX', 'JFK', 'ORD', 'DFW', 'ATL', 'DEN', 'MIA', 'PHX', 'SEA', 'LAS', 'BOS', 'MCO', 'EWR', 'MSP'];
-const airlines = ['American Airlines', 'United Airlines', 'Delta Airlines', 'Southwest Airlines', 'JetBlue', 'Alaska Airlines', 'Spirit Airlines'];
-const carCompanies = ['Enterprise', 'Hertz', 'Budget', 'Avis', 'National', 'Alamo', 'Dollar', 'Thrifty'];
+// Expanded airport codes (30 major US airports)
+const airports = [
+  'ATL', // Atlanta
+  'LAX', // Los Angeles
+  'ORD', // Chicago
+  'DFW', // Dallas
+  'DEN', // Denver
+  'JFK', // New York JFK
+  'SFO', // San Francisco
+  'SEA', // Seattle
+  'LAS', // Las Vegas
+  'MCO', // Orlando
+  'EWR', // Newark
+  'PHX', // Phoenix
+  'IAH', // Houston
+  'MIA', // Miami
+  'BOS', // Boston
+  'MSP', // Minneapolis
+  'DTW', // Detroit
+  'PHL', // Philadelphia
+  'LGA', // New York LaGuardia
+  'FLL', // Fort Lauderdale
+  'BWI', // Baltimore
+  'DCA', // Washington DC
+  'SLC', // Salt Lake City
+  'SAN', // San Diego
+  'TPA', // Tampa
+  'PDX', // Portland
+  'STL', // St. Louis
+  'HNL', // Honolulu
+  'AUS', // Austin
+  'BNA'  // Nashville
+];
+
+const airlines = [
+  'American Airlines',
+  'United Airlines',
+  'Delta Airlines',
+  'Southwest Airlines',
+  'JetBlue',
+  'Alaska Airlines',
+  'Spirit Airlines',
+  'Frontier Airlines',
+  'Allegiant Air',
+  'Hawaiian Airlines'
+];
+
+const carCompanies = [
+  'Enterprise',
+  'Hertz',
+  'Budget',
+  'Avis',
+  'National',
+  'Alamo',
+  'Dollar',
+  'Thrifty',
+  'Sixt',
+  'Payless'
+];
+
 const carModels = [
-  { type: 'compact', models: ['Honda Civic', 'Toyota Corolla', 'Hyundai Accent', 'Nissan Versa'] },
-  { type: 'sedan', models: ['Toyota Camry', 'Honda Accord', 'Nissan Altima', 'Ford Fusion'] },
-  { type: 'suv', models: ['Toyota RAV4', 'Honda CR-V', 'Ford Explorer', 'Jeep Grand Cherokee'] },
-  { type: 'luxury', models: ['BMW 5 Series', 'Mercedes E-Class', 'Audi A6', 'Lexus ES'] }
+  { type: 'compact', models: ['Honda Civic', 'Toyota Corolla', 'Hyundai Accent', 'Nissan Versa', 'Ford Focus', 'Chevrolet Cruze'] },
+  { type: 'sedan', models: ['Toyota Camry', 'Honda Accord', 'Nissan Altima', 'Ford Fusion', 'Chevrolet Malibu', 'Hyundai Sonata'] },
+  { type: 'suv', models: ['Toyota RAV4', 'Honda CR-V', 'Ford Explorer', 'Jeep Grand Cherokee', 'Nissan Rogue', 'Chevrolet Equinox'] },
+  { type: 'luxury', models: ['BMW 5 Series', 'Mercedes E-Class', 'Audi A6', 'Lexus ES', 'Tesla Model S', 'Cadillac CT5'] }
+];
+
+const hotelChains = [
+  'Hilton', 'Marriott', 'Hyatt', 'Holiday Inn', 'Best Western',
+  'Sheraton', 'Westin', 'Radisson', 'Crowne Plaza', 'Courtyard'
 ];
 
 // Generate random SSN
@@ -63,7 +141,7 @@ function generateZIP() {
 
 // Generate random email (with unique index to prevent duplicates)
 function generateEmail(firstName, lastName, index) {
-  const providers = ['gmail.com', 'yahoo.com', 'outlook.com', 'example.com'];
+  const providers = ['gmail.com', 'yahoo.com', 'outlook.com', 'icloud.com', 'hotmail.com'];
   const provider = providers[Math.floor(Math.random() * providers.length)];
   return `${firstName.toLowerCase()}.${lastName.toLowerCase()}${index}@${provider}`;
 }
@@ -76,10 +154,10 @@ function generatePhone() {
   return `${area}-${prefix}-${line}`;
 }
 
-// Generate random date in future
-function randomFutureDate(daysAhead = 30) {
+// Generate random date in next 3 months (90 days)
+function randomFutureDate(maxDaysAhead = 90) {
   const date = new Date();
-  date.setDate(date.getDate() + Math.floor(Math.random() * daysAhead) + 1);
+  date.setDate(date.getDate() + Math.floor(Math.random() * maxDaysAhead) + 1);
   return date;
 }
 
@@ -88,13 +166,23 @@ function generateConfirmationCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// Generate realistic flight duration based on airports
+function calculateFlightDuration(departure, arrival) {
+  // Base duration on airport codes (simplified)
+  const baseDuration = 90; // 1.5 hours minimum
+  const randomVariation = Math.floor(Math.random() * 180); // 0-3 hours variation
+  return baseDuration + randomVariation; // 1.5-4.5 hours
+}
+
 // Main seeding function
 async function seedDatabase() {
   let mysqlConnection;
   let mongoClient;
 
   try {
-    console.log('🌱 Starting database seeding...\n');
+    console.log('🌱 Starting ENHANCED database seeding...\n');
+    console.log('📊 Target: 1000+ flights, 1000+ hotels, 1000+ cars');
+    console.log('📅 Date Range: Next 3 months (90 days)\n');
 
     // Connect to MySQL
     console.log('📊 Connecting to MySQL...');
@@ -116,8 +204,8 @@ async function seedDatabase() {
     // ============================================
     console.log('👥 Seeding users (1000 records + 2 admin users)...');
     const userInserts = [];
-    const firstNames = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Emily', 'James', 'Emma', 'Robert', 'Olivia'];
-    const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
+    const firstNames = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Emily', 'James', 'Emma', 'Robert', 'Olivia', 'William', 'Sophia', 'Daniel', 'Isabella', 'Matthew'];
+    const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Wilson', 'Anderson', 'Thomas'];
 
     // First, add admin users
     userInserts.push([
@@ -184,115 +272,141 @@ async function seedDatabase() {
     console.log('✅ 1002 users created (1000 regular + 2 admin)\n');
 
     // ============================================
-    // 2. SEED FLIGHTS (500 flights)
+    // 2. SEED FLIGHTS (1200 flights covering all routes)
     // ============================================
-    console.log('✈️  Seeding flights (500 records)...');
+    console.log('✈️  Seeding flights (1200 records with diverse routes)...');
     const flightInserts = [];
+    const flightClasses = ['economy', 'business', 'first'];
 
-    for (let i = 0; i < 500; i++) {
-      const airline = airlines[Math.floor(Math.random() * airlines.length)];
-      const departure = airports[Math.floor(Math.random() * airports.length)];
-      let arrival = airports[Math.floor(Math.random() * airports.length)];
-      while (arrival === departure) {
-        arrival = airports[Math.floor(Math.random() * airports.length)];
+    // Generate flights for each airport pair and multiple dates
+    let flightCount = 0;
+    for (let i = 0; i < airports.length && flightCount < 1200; i++) {
+      for (let j = 0; j < airports.length && flightCount < 1200; j++) {
+        if (i === j) continue; // Skip same airport
+
+        // Create 1-2 flights for this route on different dates
+        const numFlightsForRoute = Math.floor(Math.random() * 2) + 1;
+        
+        for (let k = 0; k < numFlightsForRoute && flightCount < 1200; k++) {
+          const airline = airlines[Math.floor(Math.random() * airlines.length)];
+          const departure = airports[i];
+          const arrival = airports[j];
+
+          const departureDate = randomFutureDate(90); // Within next 3 months
+          const durationMinutes = calculateFlightDuration(departure, arrival);
+          const arrivalDate = new Date(departureDate.getTime() + durationMinutes * 60000);
+          
+          const flightClass = flightClasses[Math.floor(Math.random() * flightClasses.length)];
+          const basePrice = flightClass === 'economy' ? 120 : flightClass === 'business' ? 450 : 900;
+          const priceVariation = Math.floor(Math.random() * 350);
+          const price = basePrice + priceVariation;
+          
+          const totalSeats = flightClass === 'first' ? 20 : flightClass === 'business' ? 50 : 180;
+          const availableSeats = Math.floor(totalSeats * (0.2 + Math.random() * 0.8)); // 20-100% available
+
+          flightInserts.push([
+            `${airline.substring(0, 2).toUpperCase()}${1000 + flightCount}`,
+            airline,
+            departure,
+            arrival,
+            departureDate,
+            arrivalDate,
+            durationMinutes,
+            flightClass,
+            price.toFixed(2),
+            totalSeats,
+            availableSeats,
+            (3 + Math.random() * 2).toFixed(2), // rating 3-5
+            Math.floor(Math.random() * 300), // reviews
+            'scheduled'
+          ]);
+          
+          flightCount++;
+        }
       }
-
-      const departureDate = randomFutureDate(60);
-      const durationMinutes = Math.floor(Math.random() * 360) + 60; // 1-7 hours
-      const arrivalDate = new Date(departureDate.getTime() + durationMinutes * 60000);
-      const flightClass = ['economy', 'business', 'first'][Math.floor(Math.random() * 3)];
-      const basePrice = flightClass === 'economy' ? 150 : flightClass === 'business' ? 500 : 1000;
-      const price = basePrice + Math.floor(Math.random() * 300);
-      const totalSeats = flightClass === 'first' ? 20 : flightClass === 'business' ? 50 : 180;
-      const availableSeats = Math.floor(totalSeats * (0.3 + Math.random() * 0.7)); // 30-100% available
-
-      flightInserts.push([
-        `${airline.substring(0, 2).toUpperCase()}${1000 + i}`,
-        airline,
-        departure,
-        arrival,
-        departureDate,
-        arrivalDate,
-        durationMinutes,
-        flightClass,
-        price.toFixed(2),
-        totalSeats,
-        availableSeats,
-        (3 + Math.random() * 2).toFixed(2), // rating 3-5
-        Math.floor(Math.random() * 200), // reviews
-        'scheduled'
-      ]);
     }
 
     await mysqlConnection.query(
       'INSERT INTO flights (flight_id, airline_name, departure_airport, arrival_airport, departure_datetime, arrival_datetime, duration_minutes, flight_class, price_per_ticket, total_seats, available_seats, rating, reviews_count, status) VALUES ?',
       [flightInserts]
     );
-    console.log('✅ 500 flights created\n');
+    console.log(`✅ ${flightCount} flights created (covering ${airports.length} airports)\n`);
 
     // ============================================
-    // 3. SEED HOTELS (200 hotels with rooms)
+    // 3. SEED HOTELS (1000 hotels with rooms)
     // ============================================
-    console.log('🏨 Seeding hotels (200 records)...');
+    console.log('🏨 Seeding hotels (1000 records across all cities)...');
     const hotelInserts = [];
     const roomInserts = [];
     const amenityInserts = [];
-    const amenityList = ['WiFi', 'Parking', 'Pool', 'Gym', 'Breakfast', 'Restaurant', 'Spa', 'Business Center'];
+    const amenityList = ['WiFi', 'Parking', 'Pool', 'Gym', 'Breakfast', 'Restaurant', 'Spa', 'Business Center', 'Pet Friendly', 'Room Service', 'Concierge', 'Laundry'];
 
-    for (let i = 0; i < 200; i++) {
-      const state = states[Math.floor(Math.random() * states.length)];
+    let hotelCount = 0;
+    // Iterate through all states and cities
+    for (const state of states) {
       const cityList = cities[state] || ['Default City'];
-      const city = cityList[Math.floor(Math.random() * cityList.length)];
-      const starRating = Math.floor(Math.random() * 3) + 3; // 3-5 stars
-      const totalRooms = Math.floor(Math.random() * 200) + 50; // 50-250 rooms
+      
+      for (const city of cityList) {
+        // Create 10-15 hotels per city
+        const hotelsPerCity = Math.floor(Math.random() * 6) + 10;
+        
+        for (let i = 0; i < hotelsPerCity && hotelCount < 1000; i++) {
+          const starRating = Math.floor(Math.random() * 3) + 3; // 3-5 stars
+          const totalRooms = Math.floor(Math.random() * 200) + 50; // 50-250 rooms
+          const hotelChain = hotelChains[Math.floor(Math.random() * hotelChains.length)];
 
-      const hotelId = `HT${String(i + 100).padStart(3, '0')}`;
+          const hotelId = `HT${String(hotelCount + 100).padStart(4, '0')}`;
 
-      hotelInserts.push([
-        hotelId,
-        `Hotel ${city} ${i + 1}`,
-        `${Math.floor(Math.random() * 9999) + 1} Main St`,
-        city,
-        state,
-        generateZIP(),
-        starRating,
-        `A comfortable ${starRating}-star hotel in ${city}`,
-        totalRooms,
-        (3 + Math.random() * 2).toFixed(2), // rating
-        Math.floor(Math.random() * 500), // reviews
-        37.0 + Math.random() * 10, // latitude
-        -122.0 + Math.random() * 10, // longitude
-        'active'
-      ]);
+          hotelInserts.push([
+            hotelId,
+            `${hotelChain} ${city} ${i + 1}`,
+            `${Math.floor(Math.random() * 9999) + 1} ${['Main St', 'Broadway', 'Park Ave', 'Market St', '1st Ave'][Math.floor(Math.random() * 5)]}`,
+            city,
+            state,
+            generateZIP(),
+            starRating,
+            `A comfortable ${starRating}-star ${hotelChain} in ${city} with modern amenities`,
+            totalRooms,
+            (3 + Math.random() * 2).toFixed(2), // rating
+            Math.floor(Math.random() * 500) + 50, // reviews
+            36.0 + Math.random() * 12, // latitude (rough US range)
+            -95.0 + Math.random() * 20, // longitude (rough US range)
+            'active'
+          ]);
 
-      // Add rooms for this hotel
-      const roomTypes = ['single', 'double', 'suite'];
-      roomTypes.forEach((roomType, idx) => {
-        const basePrice = roomType === 'single' ? 100 : roomType === 'double' ? 150 : 300;
-        const price = basePrice + Math.floor(Math.random() * 100);
-        const roomCount = Math.floor(totalRooms / 3);
-        const available = Math.floor(roomCount * (0.5 + Math.random() * 0.5));
+          // Add rooms for this hotel
+          const roomTypes = ['single', 'double', 'suite', 'deluxe'];
+          roomTypes.forEach((roomType) => {
+            const basePrice = roomType === 'single' ? 80 : roomType === 'double' ? 120 : roomType === 'suite' ? 250 : 180;
+            const priceVariation = Math.floor(Math.random() * 100);
+            const price = basePrice + priceVariation;
+            const roomCount = Math.floor(totalRooms / 4);
+            const available = Math.floor(roomCount * (0.4 + Math.random() * 0.6));
 
-        roomInserts.push([
-          hotelId,
-          roomType,
-          price.toFixed(2),
-          roomType === 'single' ? 1 : roomType === 'double' ? 2 : 4,
-          roomCount,
-          available,
-          `Comfortable ${roomType} room`
-        ]);
-      });
+            roomInserts.push([
+              hotelId,
+              roomType,
+              price.toFixed(2),
+              roomType === 'single' ? 1 : roomType === 'double' ? 2 : roomType === 'suite' ? 4 : 3,
+              roomCount,
+              available,
+              `Comfortable ${roomType} room with ${roomType === 'suite' ? 'living area and' : ''} modern amenities`
+            ]);
+          });
 
-      // Add amenities (random 3-6 amenities per hotel)
-      const numAmenities = Math.floor(Math.random() * 4) + 3;
-      const shuffled = [...amenityList].sort(() => 0.5 - Math.random());
-      for (let j = 0; j < numAmenities; j++) {
-        amenityInserts.push([
-          hotelId,
-          shuffled[j],
-          j < 2 ? 1 : 0 // First 2 amenities are free
-        ]);
+          // Add amenities (random 5-8 amenities per hotel)
+          const numAmenities = Math.floor(Math.random() * 4) + 5;
+          const shuffled = [...amenityList].sort(() => 0.5 - Math.random());
+          for (let j = 0; j < numAmenities && j < shuffled.length; j++) {
+            amenityInserts.push([
+              hotelId,
+              shuffled[j],
+              j < 3 ? 1 : 0 // First 3 amenities are free
+            ]);
+          }
+          
+          hotelCount++;
+        }
       }
     }
 
@@ -308,45 +422,56 @@ async function seedDatabase() {
       'INSERT INTO hotel_amenities (hotel_id, amenity_name, is_free) VALUES ?',
       [amenityInserts]
     );
-    console.log('✅ 200 hotels created (with 600 rooms, 800+ amenities)\n');
+    console.log(`✅ ${hotelCount} hotels created (with ${roomInserts.length} rooms, ${amenityInserts.length} amenities)\n`);
 
     // ============================================
-    // 4. SEED CARS (200 cars)
+    // 4. SEED CARS (1000 cars across all cities)
     // ============================================
-    console.log('🚗 Seeding cars (200 records)...');
+    console.log('🚗 Seeding cars (1000 records across all cities)...');
     const carInserts = [];
 
-    for (let i = 0; i < 200; i++) {
-      const carTypeObj = carModels[Math.floor(Math.random() * carModels.length)];
-      const model = carTypeObj.models[Math.floor(Math.random() * carTypeObj.models.length)];
-      const company = carCompanies[Math.floor(Math.random() * carCompanies.length)];
-      const state = states[Math.floor(Math.random() * states.length)];
+    let carCount = 0;
+    // Distribute cars across all cities
+    for (const state of states) {
       const cityList = cities[state] || ['Default City'];
-      const city = cityList[Math.floor(Math.random() * cityList.length)];
-      const basePrice = carTypeObj.type === 'compact' ? 30 : carTypeObj.type === 'sedan' ? 45 : carTypeObj.type === 'suv' ? 65 : 120;
-      const price = basePrice + Math.floor(Math.random() * 30);
+      
+      for (const city of cityList) {
+        // 10-15 cars per city
+        const carsPerCity = Math.floor(Math.random() * 6) + 10;
+        
+        for (let i = 0; i < carsPerCity && carCount < 1000; i++) {
+          const carTypeObj = carModels[Math.floor(Math.random() * carModels.length)];
+          const model = carTypeObj.models[Math.floor(Math.random() * carTypeObj.models.length)];
+          const company = carCompanies[Math.floor(Math.random() * carCompanies.length)];
+          const basePrice = carTypeObj.type === 'compact' ? 25 : carTypeObj.type === 'sedan' ? 40 : carTypeObj.type === 'suv' ? 60 : 110;
+          const priceVariation = Math.floor(Math.random() * 35);
+          const price = basePrice + priceVariation;
 
-      carInserts.push([
-        `CAR${String(i + 100).padStart(3, '0')}`,
-        carTypeObj.type,
-        company,
-        model,
-        2023 + Math.floor(Math.random() * 2), // 2023-2024
-        'automatic',
-        carTypeObj.type === 'compact' ? 5 : carTypeObj.type === 'luxury' ? 5 : 5,
-        price.toFixed(2),
-        `${city}, ${state}`,
-        (3 + Math.random() * 2).toFixed(2), // rating
-        Math.floor(Math.random() * 150), // reviews
-        true // available
-      ]);
+          carInserts.push([
+            `CAR${String(carCount + 100).padStart(4, '0')}`,
+            carTypeObj.type,
+            company,
+            model,
+            2022 + Math.floor(Math.random() * 3), // 2022-2024
+            Math.random() > 0.2 ? 'automatic' : 'manual',
+            carTypeObj.type === 'compact' ? 5 : carTypeObj.type === 'luxury' ? 5 : carTypeObj.type === 'suv' ? 7 : 5,
+            price.toFixed(2),
+            `${city}, ${state}`,
+            (3 + Math.random() * 2).toFixed(2), // rating
+            Math.floor(Math.random() * 200) + 20, // reviews
+            Math.random() > 0.1 // 90% available
+          ]);
+          
+          carCount++;
+        }
+      }
     }
 
     await mysqlConnection.query(
       'INSERT INTO cars (car_id, car_type, company_name, model, year, transmission, seats, daily_rate, location, rating, reviews_count, available) VALUES ?',
       [carInserts]
     );
-    console.log('✅ 200 cars created\n');
+    console.log(`✅ ${carCount} cars created\n`);
 
     // ============================================
     // 5. SEED BOOKINGS (2000 bookings)
@@ -366,7 +491,7 @@ async function seedDatabase() {
     for (let i = 0; i < 2000; i++) {
       const bookingType = ['flight', 'hotel', 'car'][Math.floor(Math.random() * 3)];
       const user = users[Math.floor(Math.random() * users.length)];
-      const startDate = randomFutureDate(60);
+      const startDate = randomFutureDate(90); // Within next 3 months
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + Math.floor(Math.random() * 7) + 1); // 1-7 days
       
@@ -462,21 +587,26 @@ async function seedDatabase() {
     console.log('✅ 2000 billing records created\n');
 
     console.log('\n========================================');
-    console.log('🎉 Database Seeding Complete!');
+    console.log('🎉 ENHANCED Database Seeding Complete!');
     console.log('========================================');
     console.log('MySQL:');
-    console.log('  - 1000 users');
-    console.log('  - 500 flights');
-    console.log('  - 200 hotels (600 rooms, 800+ amenities)');
-    console.log('  - 200 cars');
-    console.log('  - 2000 bookings');
-    console.log('  - 2000 billing records');
+    console.log(`  - 1002 users (1000 regular + 2 admin)`);
+    console.log(`  - ${flightCount} flights (${airports.length} airports, dates within 90 days)`);
+    console.log(`  - ${hotelCount} hotels (${roomInserts.length} rooms, ${amenityInserts.length} amenities)`);
+    console.log(`  - ${carCount} cars (across all major cities)`);
+    console.log(`  - 2000 bookings`);
+    console.log(`  - 2000 billing records`);
     console.log('\nMongoDB:');
     console.log('  - Sample reviews, images, logs (from init.js)');
     console.log('  - Sample deals, bundles, watches (from init.js)');
+    console.log('\n✨ Enhanced Features:');
+    console.log('  - All dates within next 3 months (90 days)');
+    console.log(`  - ${airports.length} major airports covered`);
+    console.log('  - Multiple hotels & cars per city');
+    console.log('  - Better search coverage');
     console.log('========================================\n');
     console.log('✅ Ready to start services!');
-    console.log('Run: ./start-all.sh\n');
+    console.log('Run: make start\n');
 
   } catch (error) {
     console.error('❌ Error seeding database:', error);
@@ -508,4 +638,3 @@ if (require.main === module) {
 }
 
 module.exports = { seedDatabase };
-

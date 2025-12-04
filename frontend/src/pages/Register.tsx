@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, Phone, MapPin, CreditCard, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -9,14 +9,21 @@ import Input from '../components/common/Input';
 import Select from '../components/common/Select';
 import { useAuthStore } from '../store/authStore';
 import { RegisterData } from '../types';
-import { validateSSN, validateEmail, validatePasswordStrength, validateZipCode, validateState } from '../utils/validators';
+import { validateSSN, validateEmail, validatePasswordStrength, validateZipCode, validateState, validateCityState, getStateForCity, validatePhoneNumber } from '../utils/validators';
 import { US_STATES } from '../utils/constants';
 
 const Register = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const { register: registerUser } = useAuthStore();
+  const { register: registerUser, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const {
     register,
@@ -74,6 +81,19 @@ const Register = () => {
     }
 
     const isValid = await trigger(fieldsToValidate);
+    
+    // Additional city-state validation for step 2
+    if (isValid && currentStep === 2) {
+      const city = watch('city');
+      const state = watch('state');
+      
+      if (city && state && !validateCityState(city, state)) {
+        const correctState = getStateForCity(city);
+        toast.error(`${city} is in ${correctState}, not ${state}. Please correct the state.`);
+        return;
+      }
+    }
+    
     if (isValid) {
       setCurrentStep(currentStep + 1);
     }
@@ -228,7 +248,9 @@ const Register = () => {
                     placeholder="(123) 456-7890"
                     icon={<Phone className="w-5 h-5" />}
                     error={errors.phone?.message}
-                    {...register('phone')}
+                    {...register('phone', {
+                      validate: (value) => !value || validatePhoneNumber(value) || 'Invalid phone number format (e.g., 555-123-4567)',
+                    })}
                   />
                   <Input
                     label="Address"
