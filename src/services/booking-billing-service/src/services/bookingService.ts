@@ -191,7 +191,7 @@ export class BookingService {
         end_date: bookingData.checkOutDate,
         guests: bookingData.quantity,
         total_amount: bookingData.totalAmount,
-        special_requests: null
+        special_requests: undefined
       }, connection)
 
       // 4. Process payment and create billing record
@@ -329,7 +329,7 @@ export class BookingService {
       const refundAmount = booking.totalAmount * refundPercentage
 
       // Cancel booking
-      await this.bookingRepository.cancelBooking(bookingId, connection)
+      await this.bookingRepository.cancel(bookingId, connection)
 
       // Create refund billing record
       const refundBillingId = `BILL${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
@@ -396,7 +396,7 @@ export class BookingService {
       throw new Error('Limit must be between 1 and 1000')
     }
 
-    return await this.bookingRepository.getAll(limit)
+    return await this.bookingRepository.getAll({ limit })
   }
 }
 

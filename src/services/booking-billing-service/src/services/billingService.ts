@@ -83,7 +83,7 @@ export class BillingService {
         throw new Error('Limit must be between 1 and 1000')
       }
 
-      return await this.repository.searchBillings(filters)
+      return await this.repository.search(filters)
     } catch (error: any) {
       throw error
     }
@@ -106,7 +106,7 @@ export class BillingService {
     }>;
   }> {
     try {
-      const billings = await this.repository.searchBillings({
+      const billings = await this.searchBillings({
         startDate,
         endDate,
         status: 'completed',
@@ -174,7 +174,7 @@ export class BillingService {
       const startDate = `${year}-01-01`
       const endDate = `${year}-12-31`
 
-      const billings = await this.repository.searchBillings({
+      const billings = await this.searchBillings({
         startDate,
         endDate,
         status: 'completed',
@@ -232,7 +232,7 @@ export class BillingService {
       const startDate = `${year}-01-01`
       const endDate = `${year}-12-31`
 
-      const billings = await this.repository.searchBillings({
+      const billings = await this.searchBillings({
         startDate,
         endDate,
         status: 'completed',
@@ -311,6 +311,6 @@ export class BillingService {
       throw new Error('Limit must be between 1 and 1000')
     }
 
-    return await this.repository.searchBillings({ limit })
+    return await this.searchBillings({ limit })
   }
 }

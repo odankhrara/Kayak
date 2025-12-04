@@ -8,7 +8,7 @@ import billingController from './controllers/billingController'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 8003
+const PORT = parseInt(process.env.PORT || '8003', 10)
 
 app.use(cors())
 app.use(express.json())
