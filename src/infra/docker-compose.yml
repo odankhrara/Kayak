@@ -18,6 +18,27 @@ services:
       JWT_SECRET: your_admin_jwt_secret
     depends_on:
       - mysql 
+
+  booking-billing-service:
+    build:
+      context: ../../
+      dockerfile: src/services/booking-billing-service/Dockerfile
+    container_name: kayak-booking-billing-service
+    ports:
+      - "8003:8003"
+    environment:
+      NODE_ENV: development
+      PORT: 8003
+      MYSQL_HOST: mysql
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+      MONGODB_URI: mongodb://mongodb:27017/kayak
+      KAFKA_BROKER: kafka:9092
+    depends_on:
+      - mysql
+      - mongodb
+      - kafka
   
   listing-service:
     build:
