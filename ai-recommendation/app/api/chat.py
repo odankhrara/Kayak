@@ -266,6 +266,37 @@ async def chat_message(
             if city and 'from' in city.lower():
                 city = city.lower().split('from')[0].strip().title()
             
+            # Validate origin and destination are different
+            origin = search_request.origin
+            if origin and destination:
+                # Normalize to uppercase for comparison
+                origin_upper = origin.upper().strip()
+                dest_upper = destination.upper().strip()
+                
+                # Map city names to airport codes for comparison
+                city_to_code = {
+                    'MUMBAI': 'BOM', 'BOMBAY': 'BOM',
+                    'DELHI': 'DEL', 'NEW DELHI': 'DEL',
+                    'TOKYO': 'NRT', 'NRT': 'NRT', 'HND': 'HND',
+                    'NEW YORK': 'JFK', 'NYC': 'JFK',
+                    'LOS ANGELES': 'LAX', 'LA': 'LAX',
+                    'MIAMI': 'MIA',
+                    'SAN FRANCISCO': 'SFO', 'SF': 'SFO',
+                    'CHICAGO': 'ORD',
+                }
+                
+                origin_code = city_to_code.get(origin_upper, origin_upper)
+                dest_code = city_to_code.get(dest_upper, dest_upper)
+                
+                if origin_code == dest_code:
+                    return ChatResponse(
+                        message=f"I notice you mentioned {origin} for both origin and destination. Please specify different airports. For example: 'Find flights from {origin} to Delhi' or 'BOM to DEL'.",
+                        parsed_request=parsed_request,
+                        bundles=None,
+                        requires_clarification=True,
+                        clarification_questions=["Where would you like to go?"]
+                    )
+            
             # Convert merged request to search params
             # For refinements, add a helpful message
             refinement_msg = ""
@@ -314,12 +345,10 @@ async def chat_message(
                     bundle_flights = [f for f in bundle_flights if f]
                     bundle_hotels = [h for h in bundle_hotels if h]
                     
-                    concierge = ConciergeAgent(session)
-                    explanation = concierge.explain_tradeoffs(
-                        first_bundle, bundle_flights, bundle_hotels, bundle_list[:3]
-                    )
-                    
-                    response_message += f"\n\n**Why I recommend this bundle:**\n{explanation}"
+                    # Skip explanation for faster response (can be enabled on-demand)
+                    # concierge = ConciergeAgent(session)
+                    # explanation = concierge.explain_tradeoffs(...)
+                    # response_message += f"\n\n**Why I recommend this bundle:**\n{explanation}"
                     
                     # Store bundle ID in context for policy questions
                     context_manager.get_context(session_id)['last_bundle_id'] = first_bundle.id
@@ -419,8 +448,10 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
             session = next(session_gen)
             
             try:
-                # Process message
+                # Process message with timeout protection
+                print(f"[WebSocket] Received message: {chat_message.message[:50]}...")
                 parsed = nlu_parser.parse(chat_message.message)
+                print(f"[WebSocket] Parsed request: origin={parsed.get('origin')}, destination={parsed.get('destination')}")
                 parsed_request = ParsedTripRequest(**parsed)
                 
                 # Merge with existing context
@@ -521,9 +552,13 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
                 await websocket.send_json(response_dict)
             
             except Exception as e:
-                # Send error response
+                # Send error response with detailed logging
+                import traceback
+                error_trace = traceback.format_exc()
+                print(f"[WebSocket] Error processing message: {e}")
+                print(f"[WebSocket] Traceback: {error_trace}")
                 await websocket.send_json({
-                    "message": f"Sorry, I encountered an error: {str(e)}",
+                    "message": f"Sorry, I encountered an error processing your request. Please try again.",
                     "error": str(e)
                 })
             

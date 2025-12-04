@@ -13,6 +13,7 @@ import { config } from './config/env'
 
 dotenv.config()
 
+console.log(config)
 const app = express()
 
 app.use(cors())
@@ -40,7 +41,8 @@ app.get('/', (req, res) => {
       listingService: 'http://localhost:8002',
       bookingService: 'http://localhost:8003',
       analyticsService: 'http://localhost:8004',
-      aiRecommendation: 'http://localhost:8005'
+      aiRecommendation: 'http://localhost:8005',
+      adminService: 'http://localhost:8006'
     }
   })
 })

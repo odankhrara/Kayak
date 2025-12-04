@@ -15,6 +15,20 @@ const PORT = process.env.PORT || 8002
 app.use(cors())
 app.use(express.json())
 
+app.get('/', (req, res) => {
+  res.json({
+    service: 'listing-service',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      flights: '/api/listings/flights',
+      hotels: '/api/listings/hotels',
+      cars: '/api/listings/cars'
+    }
+  })
+})
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'listing-service' })
 })

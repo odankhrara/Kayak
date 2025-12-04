@@ -61,7 +61,7 @@ export async function getConsumer(groupId: string): Promise<Consumer> {
   return consumer
 }
 
-export async function sendKafkaMessage(topic: KafkaTopic, payload: unknown) {
+export async function sendKafkaMessage(topic: string, payload: unknown) {
   const producer = await getProducer()
   const record: ProducerRecord = {
     topic,

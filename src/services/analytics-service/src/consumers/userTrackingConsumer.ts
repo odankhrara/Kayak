@@ -1,22 +1,19 @@
-import { createConsumer } from '@kayak/common/src/kafka/kafkaClient'
-import { KAFKA_TOPICS } from '@kayak/common/src/kafka/topics'
-import { getMongoDb } from '@kayak/common/src/db/mongoClient'
+import { getConsumer } from '@kayak/common'
+import { KAFKA_TOPICS } from '@kayak/common'
+import { getMongoDb } from '@kayak/common'
+import { Consumer } from 'kafkajs'
 
 /**
  * Kafka consumer for user tracking events
  * Consumes page views, searches, booking attempts and stores them in MongoDB logs collection
  */
 export class UserTrackingConsumer {
-  private consumer: ReturnType<typeof createConsumer>
+  private consumer: Consumer | null = null
   private running = false
-
-  constructor() {
-    this.consumer = createConsumer('analytics-user-tracking-group')
-  }
 
   async start() {
     try {
-      await this.consumer.connect()
+      this.consumer = await getConsumer('analytics-user-tracking-group')
       await this.consumer.subscribe({
         topics: [KAFKA_TOPICS.USER_TRACKING],
         fromBeginning: false
@@ -63,7 +60,9 @@ export class UserTrackingConsumer {
 
   async stop() {
     this.running = false
-    await this.consumer.disconnect()
+    if (this.consumer) {
+      await this.consumer.disconnect()
+    }
     console.log('User tracking consumer stopped')
   }
 }

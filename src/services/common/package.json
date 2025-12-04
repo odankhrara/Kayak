@@ -8,6 +8,16 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./src/*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "dotenv": "^17.2.3",

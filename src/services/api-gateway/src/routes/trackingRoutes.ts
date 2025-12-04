@@ -153,7 +153,7 @@ router.post('/event', async (req: Request, res: Response) => {
     const kafkaProducer = await getProducer()
     
     // Determine topic based on event type
-    let topic = KAFKA_TOPICS.USER_TRACKING
+    let topic: string = KAFKA_TOPICS.USER_TRACKING
     if (eventData.log_type === 'click') {
       topic = KAFKA_TOPICS.CLICK_EVENT
     }
