@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "paths": {
-      "@kayak/common": ["../common/src"]
+      "@kayak/common": ["../common/dist"]
     }
   },
   "include": ["src/**/*"],
