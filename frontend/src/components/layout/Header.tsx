@@ -65,6 +65,14 @@ const Header = () => {
                 Dashboard
               </Link>
             )}
+            {isAuthenticated && (user?.isAdmin) && (
+              <Link
+                to="/admin/host-analysis"
+                className="text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
+              >
+                Host Analysis
+              </Link>
+            )}
             {isAuthenticated && user?.role === 'admin' && (
               <Link
                 to="/admin/billings"

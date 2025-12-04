@@ -182,16 +182,6 @@ const Home = () => {
                 <span>Cars</span>
               </button>
             </div>
-
-            {isAdmin && (
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/admin/dashboard')}
-                className="md:self-end"
-              >
-                Dashboard
-              </Button>
-            )}
           </div>
 
             {/* Flight Search Form */}

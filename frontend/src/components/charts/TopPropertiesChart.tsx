@@ -8,7 +8,7 @@ interface TopPropertiesChartProps {
 export function TopPropertiesChart({ data }: TopPropertiesChartProps) {
   return (
     <div className="chart-container">
-      <h3>Top Properties by Revenue</h3>
+      <h3>Top Flights by Revenue</h3>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} layout="vertical">
           <CartesianGrid strokeDasharray="3 3" />

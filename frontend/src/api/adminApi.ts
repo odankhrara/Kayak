@@ -2,6 +2,7 @@ import axios from 'axios'
 import api from '../services/api'
 
 const API_BASE_URL = 'http://localhost:8006/api/admin'
+const HOST_ANALYSIS_API_BASE_URL = 'http://localhost:8004/api/admin'
 
 export interface RevenueStats {
   totalRevenue: number
@@ -19,7 +20,6 @@ export interface BookingStats {
 export const adminApi = {
   getRevenueStats: async (): Promise<RevenueStats> => {
     const response = await api.get(`${API_BASE_URL}/revenue`)
-    console.log('Revenue Stats Response:', response);
     return response.data
   },
 
@@ -38,12 +38,15 @@ export const adminApi = {
     return response.data
   },
 
+
+  ///////////////////////////////////////////////////////////////
+
   // Host/Provider Analysis APIs
   getClicksPerPage: async (startDate?: string, endDate?: string): Promise<any[]> => {
     const params = new URLSearchParams()
     if (startDate) params.append('startDate', startDate)
     if (endDate) params.append('endDate', endDate)
-    const response = await axios.get(`${API_BASE_URL}/host/clicks-per-page?${params}`)
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/host/clicks-per-page?${params}`)
     return response.data
   },
 
@@ -51,7 +54,7 @@ export const adminApi = {
     const params = new URLSearchParams()
     if (startDate) params.append('startDate', startDate)
     if (endDate) params.append('endDate', endDate)
-    const response = await axios.get(`${API_BASE_URL}/host/property-clicks?${params}`)
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/host/property-clicks?${params}`)
     return response.data
   },
 
@@ -59,14 +62,14 @@ export const adminApi = {
     const params = new URLSearchParams()
     if (startDate) params.append('startDate', startDate)
     if (endDate) params.append('endDate', endDate)
-    const response = await axios.get(`${API_BASE_URL}/host/least-seen-areas?${params}`)
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/host/least-seen-areas?${params}`)
     return response.data
   },
 
   getPropertyReviews: async (propertyType?: 'hotel' | 'flight' | 'car'): Promise<any[]> => {
     const params = new URLSearchParams()
     if (propertyType) params.append('propertyType', propertyType)
-    const response = await axios.get(`${API_BASE_URL}/host/property-reviews?${params}`)
+    const response = await axios.get(`${HOST_ANALYSIS_API_BASE_URL}/host/property-reviews?${params}`)
     return response.data
   },
 
@@ -75,14 +78,14 @@ export const adminApi = {
     if (userId) params.append('userId', userId)
     if (city) params.append('city', city)
     if (state) params.append('state', state)
-    const response = await axios.get(`${API_BASE_URL}/host/user-trace?${params}`)
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/host/user-trace?${params}`)
     return response.data
   },
 
   getBiddingTrace: async (propertyId?: string): Promise<any[]> => {
     const params = new URLSearchParams()
     if (propertyId) params.append('propertyId', propertyId)
-    const response = await axios.get(`${API_BASE_URL}/host/bidding-trace?${params}`)
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/host/bidding-trace?${params}`)
     return response.data
   },
 }
