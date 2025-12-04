@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Car as CarIcon, Users } from 'lucide-react';
@@ -14,6 +14,7 @@ import { formatCurrency, calculateNights } from '../utils/formatters';
 import { CAR_TYPES, TRANSMISSION_TYPES } from '../utils/constants';
 import { toast } from 'react-toastify';
 import { useAuthStore } from '../store/authStore';
+import { trackSearch, trackBookingAttempt } from '../utils/clickTracking';
 
 const CarSearch = () => {
   const [searchParams] = useSearchParams();
@@ -41,11 +42,31 @@ const CarSearch = () => {
     enabled: !!filters.location,
   });
 
+  // Track search results when cars are loaded
+  useEffect(() => {
+    if (cars && filters.location) {
+      trackSearch({
+        type: 'car',
+        location: filters.location,
+        pickupDate: filters.pickupDate,
+        returnDate: filters.returnDate,
+        carType: filters.carType || 'any',
+      }, cars.length);
+    }
+  }, [cars]);
+
   const days = filters.pickupDate && filters.returnDate 
     ? calculateNights(filters.pickupDate, filters.returnDate)
     : 0;
 
   const handleBookCar = (car: Car) => {
+    // Track booking attempt
+    trackBookingAttempt(
+      car.carId?.toString() || 'unknown',
+      'car',
+      (car.dailyRentalPrice || 0) * days
+    );
+
     if (!isAuthenticated) {
       toast.error('Please login to book this car');
       navigate('/login', {

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Hotel as HotelIcon, Star, MapPin } from 'lucide-react';
+import { Hotel as HotelIcon, Star, MapPin, Gavel } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { hotelService } from '../services/hotel.service';
 import { Hotel } from '../types';
@@ -14,11 +14,13 @@ import { formatCurrency, calculateNights } from '../utils/formatters';
 import { SORT_OPTIONS, STAR_RATINGS, US_STATES } from '../utils/constants';
 import { toast } from 'react-toastify';
 import { useAuthStore } from '../store/authStore';
+import { trackSearch, trackBookingAttempt } from '../utils/clickTracking';
+import { MakeOfferModal } from '../components/bidding';
 
 const HotelSearch = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -26,6 +28,10 @@ const HotelSearch = () => {
   const [sortBy, setSortBy] = useState('price');
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
+  
+  // Bidding state
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [selectedHotelForBid, setSelectedHotelForBid] = useState<Hotel | null>(null);
 
   const filters = {
     city: searchParams.get('city') || '',
@@ -47,11 +53,33 @@ const HotelSearch = () => {
     enabled: !!filters.city,
   });
 
+  // Track search results when hotels are loaded
+  useEffect(() => {
+    if (hotels && filters.city) {
+      trackSearch({
+        type: 'hotel',
+        city: filters.city,
+        state: filters.state,
+        checkIn: filters.checkIn,
+        checkOut: filters.checkOut,
+        guests: filters.guests,
+        rooms: filters.rooms,
+      }, hotels.length);
+    }
+  }, [hotels]);
+
   const nights = filters.checkIn && filters.checkOut 
     ? calculateNights(filters.checkIn, filters.checkOut)
     : 0;
 
   const handleBookHotel = (hotel: Hotel) => {
+    // Track booking attempt
+    trackBookingAttempt(
+      hotel.hotelId,
+      'hotel',
+      (hotel.rooms?.[0]?.pricePerNight || 0) * nights
+    );
+
     if (!isAuthenticated) {
       toast.error('Please login to book this hotel');
       navigate('/login', {
@@ -78,6 +106,16 @@ const HotelSearch = () => {
         checkOutDate: filters.checkOut,
       },
     });
+  };
+
+  const handleMakeOffer = (hotel: Hotel) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to make an offer');
+      navigate('/login');
+      return;
+    }
+    setSelectedHotelForBid(hotel);
+    setShowBidModal(true);
   };
 
   if (!filters.city) {
@@ -381,9 +419,19 @@ const HotelSearch = () => {
                           {formatCurrency((hotel.rooms?.[0]?.pricePerNight || 0) * nights)}
                         </p>
                         <p className="text-sm text-slate-500">{nights} {nights === 1 ? 'night' : 'nights'}</p>
-                        <Button onClick={() => handleBookHotel(hotel)} className="mt-2">
-                          Book Now
-                        </Button>
+                        <div className="flex gap-2 mt-2 justify-end">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => handleMakeOffer(hotel)}
+                            className="flex items-center gap-1"
+                          >
+                            <Gavel className="w-4 h-4" />
+                            Make Offer
+                          </Button>
+                          <Button onClick={() => handleBookHotel(hotel)}>
+                            Book Now
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -393,6 +441,24 @@ const HotelSearch = () => {
           ))}
         </div>
       </div>
+
+      {/* Make Offer Modal */}
+      {selectedHotelForBid && (
+        <MakeOfferModal
+          isOpen={showBidModal}
+          onClose={() => {
+            setShowBidModal(false);
+            setSelectedHotelForBid(null);
+          }}
+          itemType="hotel"
+          itemId={selectedHotelForBid.hotelId}
+          itemName={selectedHotelForBid.hotelName}
+          originalPrice={(selectedHotelForBid.rooms?.[0]?.pricePerNight || 0) * nights}
+          onSuccess={(bid) => {
+            console.log('Bid submitted:', bid);
+          }}
+        />
+      )}
     </div>
   );
 };

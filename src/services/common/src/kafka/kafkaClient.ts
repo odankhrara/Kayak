@@ -36,6 +36,14 @@ export async function getProducer(): Promise<Producer> {
 }
 
 /**
+ * Create a Kafka producer instance (synchronous, not connected)
+ * Use this when you want to manage connection lifecycle yourself
+ */
+export function createProducer(): Producer {
+  return kafka.producer()
+}
+
+/**
  * Create a Kafka consumer instance (synchronous, not connected)
  * Use this when you want to manage connection lifecycle yourself
  */

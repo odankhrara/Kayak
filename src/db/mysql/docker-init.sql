@@ -379,7 +379,55 @@ VALUES
 -- ('CAR010', 'luxury', 'Hertz', 'Mercedes E-Class', 2024, 'automatic', 5, 150.99, 'New York, NY', 4.9, 12, TRUE);
 
 -- ============================================
--- 11. FAVORITES TABLE
+-- 11. REVIEWS TABLE
+-- ============================================
+CREATE TABLE reviews (
+    review_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(11) NOT NULL,
+    item_type ENUM('flight', 'hotel', 'car') NOT NULL,
+    item_id VARCHAR(50) NOT NULL COMMENT 'flight_id, hotel_id, or car_id',
+    booking_id INT NULL COMMENT 'Optional link to booking',
+    rating TINYINT NOT NULL,
+    title VARCHAR(200),
+    comment TEXT,
+    helpful_count INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved',
+    
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_item (item_type, item_id),
+    INDEX idx_user_reviews (user_id),
+    INDEX idx_rating (rating),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 12. BIDS TABLE (Name Your Own Price)
+-- ============================================
+CREATE TABLE bids (
+    bid_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(11) NOT NULL,
+    item_type ENUM('flight', 'hotel', 'car') NOT NULL,
+    item_id VARCHAR(50) NOT NULL,
+    original_price DECIMAL(10,2) NOT NULL,
+    bid_amount DECIMAL(10,2) NOT NULL,
+    status ENUM('pending', 'accepted', 'rejected', 'expired', 'completed') DEFAULT 'pending',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    responded_at TIMESTAMP NULL,
+    booking_id INT NULL COMMENT 'Link to booking if bid accepted and completed',
+    
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_user_bids (user_id),
+    INDEX idx_item (item_type, item_id),
+    INDEX idx_status (status),
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 13. FAVORITES TABLE
 -- ============================================
 CREATE TABLE favorites (
     favorite_id INT PRIMARY KEY AUTO_INCREMENT,

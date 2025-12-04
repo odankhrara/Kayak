@@ -14,6 +14,7 @@ import { formatCurrency, formatTime, formatDuration } from '../utils/formatters'
 import { SORT_OPTIONS } from '../utils/constants';
 import { toast } from 'react-toastify';
 import { useAuthStore } from '../store/authStore';
+import { trackSearch, trackBookingAttempt } from '../utils/clickTracking';
 
 const FlightSearch = () => {
   const [searchParams] = useSearchParams();
@@ -46,7 +47,27 @@ const FlightSearch = () => {
     enabled: !!(filters.origin && filters.destination),
   });
 
+  // Track search results when flights are loaded
+  useEffect(() => {
+    if (flights && filters.origin && filters.destination) {
+      trackSearch({
+        type: 'flight',
+        origin: filters.origin,
+        destination: filters.destination,
+        departureDate: filters.departureDate,
+        passengers: filters.passengers,
+        class: filters.class,
+      }, flights.length);
+    }
+  }, [flights]);
+
   const handleBookFlight = (flight: Flight) => {
+    // Track booking attempt
+    trackBookingAttempt(
+      flight.flightId,
+      'flight',
+      flight.pricePerTicket || flight.ticketPrice || 0
+    );
     if (!isAuthenticated) {
       toast.error('Please login to book this flight');
       navigate('/login', {
