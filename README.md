@@ -282,10 +282,10 @@ Kayak/
 
 **Recent Improvements (December 2024):**
 - ✅ **Fixed NLU Parser**: Now correctly extracts airport codes (e.g., "DEL" from "BOM to DEL flights")
-- ✅ **Improved Data Import**: Removed duplicate checks, now imports 1,504+ flight deals (was 4)
+- ✅ **Improved Data Import**: Removed duplicate checks, now imports 1,504+ flight deals and 1,587+ hotel deals (was 4 flights)
 - ✅ **Enhanced Airport Support**: Added more Indian airports (BLR, MAA, HYD, CCU)
-- ✅ **WebSocket Connection**: Fixed connection issues with automatic reconnection logic
-- ✅ **Bundle Booking Flow**: Fixed field mapping so bundle clicks show complete booking information
+- ✅ **WebSocket Connection**: Fixed connection stability with automatic reconnection and better error handling
+- ✅ **Bundle Booking Flow**: Fixed field mapping so clicking bundles shows complete booking information
 - ✅ **Context-Aware Parsing**: Improved NLU parser to correctly handle follow-up messages in conversation
 - ✅ **Better Error Handling**: Improved validation and user feedback throughout the application
 
@@ -293,7 +293,7 @@ Kayak/
 - **CSV Indexing**: 24,563 flights and 13,726 hotels indexed from Kaggle datasets
 - **Database Population**: 
   - MySQL: 10,015 flights, 632 hotels, 18,497 cars
-  - AI Database: 1,004+ flight deals, 581+ hotel deals
+  - AI Database: 1,504+ flight deals, 1,587+ hotel deals
 - **Data Import Scripts**: Automated scripts to populate from CSV files
 - **Status Checking**: Script to verify data import completeness
 
@@ -799,35 +799,35 @@ make stop
 **Solution**:
 - Removed duplicate checks in `populate_all_datasets.py`
 - Increased import limits (500 flights/hotels from CSV index, 2000 rows from raw CSV)
-- Result: **1,504+ flight deals** (was 4), **1,587+ hotel deals**
+- Result: **1,504+ flight deals** (was 4), **1,587+ hotel deals** (was 581)
 
 ### 3. Enhanced Airport Support ✅
 - Added more Indian airport codes: BLR (Bangalore), MAA (Chennai), HYD (Hyderabad), CCU (Kolkata)
 
-### 4. WebSocket Connection & Chat Improvements ✅ (Latest)
+### 4. WebSocket Connection & Chat Improvements ✅
 **Problem**: WebSocket connections were failing, AI assistant couldn't maintain real-time chat
 
 **Solution**:
-- **Frontend**: Implemented automatic reconnection logic with exponential backoff
-- **Backend**: Enhanced WebSocket handler with better error handling and context-aware parsing
-- **Context Management**: Improved conversation context to preserve user information across messages
-- **Response Formatting**: Fixed response messages to properly distinguish between "departing from" and "going to"
+- Implemented automatic reconnection logic with exponential backoff in frontend
+- Enhanced WebSocket handler with better error handling and context-aware parsing
+- Improved conversation context management to preserve user information across messages
+- Fixed response message formatting to properly distinguish between "departing from" and "going to"
 - Result: **Stable WebSocket connections** with automatic reconnection on failures
 
-### 5. Bundle Booking Flow Fixes ✅ (Latest)
+### 5. Bundle Booking Flow Fixes ✅
 **Problem**: Clicking on AI-recommended bundles showed empty booking details (no flight info, $0 prices)
 
 **Solution**:
-- **Field Mapping**: Fixed mapping between bundle API response and booking page expectations
+- Fixed field mapping between bundle API response and booking page expectations:
   - `airline` → `airlineName`
   - `origin` → `departureAirport`
   - `destination` → `arrivalAirport`
   - `discounted_price` → `pricePerTicket`
-- **Date Handling**: Extract and format dates from flight `departure_time` and `arrival_time`
-- **Hotel Booking**: Fixed hotel entity structure with `rooms` array and proper date handling
+- Added date extraction from flight `departure_time` and `arrival_time`
+- Fixed hotel booking entity structure with `rooms` array and proper date handling
 - Result: **Complete booking information** displayed correctly when clicking bundles
 
-### 6. Context-Aware NLU Parsing ✅ (Latest)
+### 6. Context-Aware NLU Parsing ✅
 **Problem**: Follow-up messages like "bombay" or "Delhi" were incorrectly parsed as destinations when user was asked for origin
 
 **Solution**:
@@ -990,4 +990,4 @@ This project is for educational purposes only. Not licensed for commercial use.
 - ✅ **Tracking Service**: Event tracking system with Kafka integration
 - ✅ **Infrastructure**: Enhanced Docker setup with helper scripts
 
-**Last Updated**: December 2, 2024
+**Last Updated**: December 5, 2024
