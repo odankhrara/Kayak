@@ -118,14 +118,71 @@ async def get_bundle(
     if not bundle:
         raise HTTPException(status_code=404, detail="Bundle not found")
     
-    # Parse and fetch deals
-    flight_ids = [int(id) for id in bundle.flight_deal_ids.split(",") if id.strip()]
-    hotel_ids = [int(id) for id in bundle.hotel_deal_ids.split(",") if id.strip()]
+    # Parse and fetch deals - handle None or empty strings
+    flight_ids = []
+    if bundle.flight_deal_ids:
+        flight_ids = [int(id) for id in bundle.flight_deal_ids.split(",") if id.strip()]
     
-    flights = [FlightDealResponse.model_validate(session.get(FlightDeal, fid))
-               for fid in flight_ids if session.get(FlightDeal, fid)]
-    hotels = [HotelDealResponse.model_validate(session.get(HotelDeal, hid))
-              for hid in hotel_ids if session.get(HotelDeal, hid)]
+    hotel_ids = []
+    if bundle.hotel_deal_ids:
+        hotel_ids = [int(id) for id in bundle.hotel_deal_ids.split(",") if id.strip()]
+    
+    # Helper function to convert tags string to list
+    def parse_tags(tags_str):
+        if not tags_str:
+            return []
+        if isinstance(tags_str, list):
+            return tags_str
+        return [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+    
+    # Fetch and convert flights
+    flights = []
+    for fid in flight_ids:
+        flight = session.get(FlightDeal, fid)
+        if flight:
+            flight_dict = {
+                "id": flight.id,
+                "airline": flight.airline,
+                "flight_number": flight.flight_number,
+                "origin": flight.origin,
+                "destination": flight.destination,
+                "departure_time": flight.departure_time,
+                "arrival_time": flight.arrival_time,
+                "original_price": flight.original_price,
+                "discounted_price": flight.discounted_price,
+                "discount_percentage": flight.discount_percentage,
+                "available_seats": flight.available_seats,
+                "deal_score": flight.deal_score,
+                "tags": parse_tags(flight.tags) if hasattr(flight, 'tags') else []
+            }
+            flights.append(FlightDealResponse.model_validate(flight_dict))
+    
+    # Fetch and convert hotels
+    hotels = []
+    for hid in hotel_ids:
+        hotel = session.get(HotelDeal, hid)
+        if hotel:
+            hotel_dict = {
+                "id": hotel.id,
+                "name": hotel.name,
+                "city": hotel.city,
+                "state": hotel.state,
+                "country": hotel.country,
+                "address": hotel.address,
+                "original_price_per_night": hotel.original_price_per_night,
+                "discounted_price_per_night": hotel.discounted_price_per_night,
+                "discount_percentage": hotel.discount_percentage,
+                "available_rooms": hotel.available_rooms,
+                "rating": hotel.rating,
+                "deal_score": hotel.deal_score,
+                "tags": parse_tags(hotel.tags) if hasattr(hotel, 'tags') else []
+            }
+            hotels.append(HotelDealResponse.model_validate(hotel_dict))
+    
+    # Handle tags - handle None or empty strings
+    tags = []
+    if bundle.tags:
+        tags = [tag.strip() for tag in bundle.tags.split(",") if tag.strip()]
     
     response = BundleResponse(
         id=bundle.id,
@@ -133,7 +190,7 @@ async def get_bundle(
         description=bundle.description,
         total_price=bundle.total_price,
         savings=bundle.savings,
-        tags=[tag.strip() for tag in bundle.tags.split(",") if tag.strip()],
+        tags=tags,
         flights=flights,
         hotels=hotels,
         cars=[],

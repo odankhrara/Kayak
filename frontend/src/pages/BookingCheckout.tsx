@@ -56,7 +56,9 @@ const BookingCheckout = () => {
       basePrice = (entity.pricePerTicket || entity.ticketPrice || 0) * quantity;
     } else if (bookingType === 'hotel') {
       const nights = calculateNights(checkInDate, checkOutDate);
-      basePrice = (entity.rooms?.[0]?.pricePerNight || 0) * nights * quantity;
+      // Try rooms array first, then fallback to direct pricePerNight
+      const pricePerNight = entity.rooms?.[0]?.pricePerNight || entity.pricePerNight || 0;
+      basePrice = pricePerNight * nights * quantity;
     } else if (bookingType === 'car') {
       const days = calculateNights(checkInDate, checkOutDate);
       basePrice = entity.dailyRentalPrice * days;
