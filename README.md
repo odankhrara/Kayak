@@ -282,9 +282,12 @@ Kayak/
 
 **Recent Improvements (December 2024):**
 - ✅ **Fixed NLU Parser**: Now correctly extracts airport codes (e.g., "DEL" from "BOM to DEL flights")
-- ✅ **Improved Data Import**: Removed duplicate checks, now imports 1,000+ flight deals (was 4)
+- ✅ **Improved Data Import**: Removed duplicate checks, now imports 1,504+ flight deals (was 4)
 - ✅ **Enhanced Airport Support**: Added more Indian airports (BLR, MAA, HYD, CCU)
-- ✅ **Better Error Handling**: Improved validation and user feedback
+- ✅ **WebSocket Connection**: Fixed connection issues with automatic reconnection logic
+- ✅ **Bundle Booking Flow**: Fixed field mapping so bundle clicks show complete booking information
+- ✅ **Context-Aware Parsing**: Improved NLU parser to correctly handle follow-up messages in conversation
+- ✅ **Better Error Handling**: Improved validation and user feedback throughout the application
 
 #### 3. **Data Import & Management** ✅
 - **CSV Indexing**: 24,563 flights and 13,726 hotels indexed from Kaggle datasets
@@ -481,8 +484,8 @@ npm run dev
 - File-based, easy to backup
 
 **Tables:**
-- `flight_deals` - AI-processed flight deals (1,004+ records)
-- `hotel_deals` - AI-processed hotel deals (581+ records)
+- `flight_deals` - AI-processed flight deals (1,504+ records)
+- `hotel_deals` - AI-processed hotel deals (1,587+ records)
 - `bundles` - Travel bundles (flight + hotel combinations)
 - `watches` - Price/inventory watches
 
@@ -796,12 +799,44 @@ make stop
 **Solution**:
 - Removed duplicate checks in `populate_all_datasets.py`
 - Increased import limits (500 flights/hotels from CSV index, 2000 rows from raw CSV)
-- Result: **1,004+ flight deals** (was 4), **581+ hotel deals**
+- Result: **1,504+ flight deals** (was 4), **1,587+ hotel deals**
 
 ### 3. Enhanced Airport Support ✅
 - Added more Indian airport codes: BLR (Bangalore), MAA (Chennai), HYD (Hyderabad), CCU (Kolkata)
 
-### 4. Documentation Added ✅
+### 4. WebSocket Connection & Chat Improvements ✅ (Latest)
+**Problem**: WebSocket connections were failing, AI assistant couldn't maintain real-time chat
+
+**Solution**:
+- **Frontend**: Implemented automatic reconnection logic with exponential backoff
+- **Backend**: Enhanced WebSocket handler with better error handling and context-aware parsing
+- **Context Management**: Improved conversation context to preserve user information across messages
+- **Response Formatting**: Fixed response messages to properly distinguish between "departing from" and "going to"
+- Result: **Stable WebSocket connections** with automatic reconnection on failures
+
+### 5. Bundle Booking Flow Fixes ✅ (Latest)
+**Problem**: Clicking on AI-recommended bundles showed empty booking details (no flight info, $0 prices)
+
+**Solution**:
+- **Field Mapping**: Fixed mapping between bundle API response and booking page expectations
+  - `airline` → `airlineName`
+  - `origin` → `departureAirport`
+  - `destination` → `arrivalAirport`
+  - `discounted_price` → `pricePerTicket`
+- **Date Handling**: Extract and format dates from flight `departure_time` and `arrival_time`
+- **Hotel Booking**: Fixed hotel entity structure with `rooms` array and proper date handling
+- Result: **Complete booking information** displayed correctly when clicking bundles
+
+### 6. Context-Aware NLU Parsing ✅ (Latest)
+**Problem**: Follow-up messages like "bombay" or "Delhi" were incorrectly parsed as destinations when user was asked for origin
+
+**Solution**:
+- Enhanced NLU parser to use conversation context when parsing follow-up messages
+- If asking for origin and user provides just a city, treat it as origin (not destination)
+- Priority-based field extraction based on missing fields in context
+- Result: **Accurate parsing** of follow-up messages in conversation flow
+
+### 7. Documentation Added ✅
 - `AGENT_PROMPT_EXAMPLES.md`: 30+ example prompts for AI agent
 - `DATA_IMPORT_STATUS.md`: Complete data import status and verification
 - `AGENT_FIXES_APPLIED.md`: Documentation of fixes and improvements
@@ -861,10 +896,10 @@ make stop
 
 ## 🐛 Known Issues & Limitations
 
-- WebSocket reconnection logic needs improvement
 - Mobile UI needs more testing
 - AI deal detection rules are simplistic (MVP - can be enhanced with ML)
 - No real payment gateway integration (mock only - for educational purposes)
+- Some edge cases in NLU parsing for complex multi-city queries
 
 ---
 
@@ -940,9 +975,12 @@ This project is for educational purposes only. Not licensed for commercial use.
 
 ### December 2024 - AI Agent & Data Import Improvements
 - ✅ **NLU Parser Fix**: Correctly extracts airport codes from natural language
-- ✅ **Data Import Enhancement**: Increased flight deals from 4 to 1,004+
+- ✅ **Data Import Enhancement**: Increased flight deals from 4 to 1,504+ and hotels to 1,587+
+- ✅ **WebSocket Connection**: Fixed connection stability with automatic reconnection
+- ✅ **Bundle Booking Flow**: Fixed field mapping for complete booking information display
+- ✅ **Context-Aware Parsing**: Improved conversation flow with context-aware NLU parsing
 - ✅ **Documentation**: Added comprehensive guides for agent usage and data import
-- ✅ **Airport Support**: Added more Indian airport codes
+- ✅ **Airport Support**: Added more Indian airport codes (BLR, MAA, HYD, CCU)
 
 ### November 2024 - Major Implementation Update
 - ✅ **Frontend**: Complete React implementation with 7 pages, 30+ components
