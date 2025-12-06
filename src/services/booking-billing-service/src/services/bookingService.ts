@@ -81,11 +81,29 @@ export class BookingService {
 
       } else if (bookingType === 'hotel') {
         // Check hotel room availability
-        const [roomRows] = await connection.execute(
-          'SELECT available_rooms FROM hotel_rooms WHERE hotel_id = ? AND room_type = ? FOR UPDATE',
-          [entityId.split(':')[0], entityId.split(':')[1] || 'Standard']
-        )
-        const room = (roomRows as any[])[0]
+        const hotelId = entityId.split(':')[0]
+        let roomType = entityId.split(':')[1]
+        
+        let room: any = null
+        
+        if (roomType) {
+          // Specific room type requested
+          const [roomRows] = await connection.execute(
+            'SELECT room_type, available_rooms FROM hotel_rooms WHERE hotel_id = ? AND room_type = ? FOR UPDATE',
+            [hotelId, roomType]
+          )
+          room = (roomRows as any[])[0]
+        } else {
+          // No room type specified - auto-select first available room
+          const [roomRows] = await connection.execute(
+            'SELECT room_type, available_rooms FROM hotel_rooms WHERE hotel_id = ? AND available_rooms >= ? ORDER BY price_per_night ASC FOR UPDATE',
+            [hotelId, quantity]
+          )
+          room = (roomRows as any[])[0]
+          if (room) {
+            roomType = room.room_type
+          }
+        }
         
         if (!room) {
           throw new Error(`Hotel room not found for ${entityId}`)
@@ -97,7 +115,7 @@ export class BookingService {
         // Reserve rooms
         await connection.execute(
           'UPDATE hotel_rooms SET available_rooms = available_rooms - ? WHERE hotel_id = ? AND room_type = ?',
-          [quantity, entityId.split(':')[0], entityId.split(':')[1] || 'Standard']
+          [quantity, hotelId, roomType]
         )
 
       } else if (bookingType === 'car') {
@@ -127,6 +145,35 @@ export class BookingService {
   }
 
   /**
+   * Check and reserve a specific hotel room type (for multi-room bookings)
+   */
+  private async checkAndReserveHotelRoom(
+    hotelId: string,
+    roomType: string,
+    quantity: number,
+    connection: PoolConnection
+  ): Promise<void> {
+    const [roomRows] = await connection.execute(
+      'SELECT room_type, available_rooms FROM hotel_rooms WHERE hotel_id = ? AND room_type = ? FOR UPDATE',
+      [hotelId, roomType]
+    )
+    const room = (roomRows as any[])[0]
+    
+    if (!room) {
+      throw new Error(`Room type "${roomType}" not found for hotel ${hotelId}`)
+    }
+    if (room.available_rooms < quantity) {
+      throw new Error(`Insufficient ${roomType} rooms available. Requested: ${quantity}, Available: ${room.available_rooms}`)
+    }
+
+    // Reserve rooms
+    await connection.execute(
+      'UPDATE hotel_rooms SET available_rooms = available_rooms - ? WHERE hotel_id = ? AND room_type = ?',
+      [quantity, hotelId, roomType]
+    )
+  }
+
+  /**
    * Create a booking with payment (full transaction)
    */
   async createBookingWithPayment(bookingData: {
@@ -144,6 +191,12 @@ export class BookingService {
       expiryDate?: string;
       paypalEmail?: string;
     };
+    roomSelections?: Array<{
+      roomType: string;
+      quantity: number;
+      pricePerNight: number;
+      maxGuests: number;
+    }>;
   }): Promise<{
     booking: any;
     billing: any;
@@ -169,12 +222,25 @@ export class BookingService {
       }
 
       // 2. Check and reserve inventory
-      await this.checkAndReserveInventory(
-        bookingData.bookingType,
-        bookingData.entityId,
-        bookingData.quantity,
-        connection
-      )
+      // For multi-room hotel bookings, handle each room type separately
+      if (bookingData.bookingType === 'hotel' && bookingData.roomSelections && bookingData.roomSelections.length > 0) {
+        const hotelId = bookingData.entityId.split(':')[0] || bookingData.entityId;
+        for (const selection of bookingData.roomSelections) {
+          await this.checkAndReserveHotelRoom(
+            hotelId,
+            selection.roomType,
+            selection.quantity,
+            connection
+          )
+        }
+      } else {
+        await this.checkAndReserveInventory(
+          bookingData.bookingType,
+          bookingData.entityId,
+          bookingData.quantity,
+          connection
+        )
+      }
 
       // 3. Create booking record
       const bookingRef = this.generateBookingRef(bookingData.bookingType)
@@ -193,6 +259,24 @@ export class BookingService {
         total_amount: bookingData.totalAmount,
         special_requests: undefined
       }, connection)
+
+      // 3b. Store room selections for multi-room hotel bookings
+      if (bookingData.bookingType === 'hotel' && bookingData.roomSelections && bookingData.roomSelections.length > 0) {
+        const hotelId = bookingData.entityId.split(':')[0] || bookingData.entityId;
+        const nights = Math.ceil(
+          (new Date(bookingData.checkOutDate).getTime() - new Date(bookingData.checkInDate).getTime()) 
+          / (1000 * 60 * 60 * 24)
+        );
+        
+        for (const selection of bookingData.roomSelections) {
+          const subtotal = selection.quantity * selection.pricePerNight * nights;
+          await connection.execute(
+            `INSERT INTO booking_rooms (booking_id, hotel_id, room_type, quantity, price_per_night, max_guests, subtotal)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [bookingId, hotelId, selection.roomType, selection.quantity, selection.pricePerNight, selection.maxGuests, subtotal]
+          );
+        }
+      }
 
       // 4. Process payment and create billing record
       const billingId = `BILL${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`
@@ -236,7 +320,7 @@ export class BookingService {
   }
 
   /**
-   * Get booking by ID
+   * Get booking by ID with room selections for hotel bookings
    */
   async getById(bookingId: string): Promise<any> {
     if (!bookingId || bookingId.trim().length === 0) {
@@ -248,7 +332,35 @@ export class BookingService {
       throw new Error(`Booking ${bookingId} not found`)
     }
 
+    // If it's a hotel booking, fetch room selections
+    if (booking.bookingType === 'hotel') {
+      const roomSelections = await this.getBookingRooms(bookingId)
+      return { ...booking, roomSelections }
+    }
+
     return booking
+  }
+
+  /**
+   * Get room selections for a booking
+   */
+  private async getBookingRooms(bookingId: string): Promise<any[]> {
+    try {
+      const [rows] = await mysqlPool.query(
+        'SELECT room_type, quantity, price_per_night, max_guests, subtotal FROM booking_rooms WHERE booking_id = ?',
+        [bookingId]
+      )
+      return (rows as any[]).map(row => ({
+        roomType: row.room_type,
+        quantity: row.quantity,
+        pricePerNight: parseFloat(row.price_per_night),
+        maxGuests: row.max_guests,
+        subtotal: parseFloat(row.subtotal),
+      }))
+    } catch (error) {
+      console.error('Error fetching booking rooms:', error)
+      return []
+    }
   }
 
   /**
@@ -261,14 +373,26 @@ export class BookingService {
 
     const bookings = await this.bookingRepository.getByUserId(userId)
 
+    // Add room selections for hotel bookings
+    const enrichedBookings = await Promise.all(
+      bookings.map(async (booking: any) => {
+        if (booking.bookingType === 'hotel') {
+          const roomSelections = await this.getBookingRooms(booking.bookingId)
+          return { ...booking, roomSelections }
+        }
+        return booking
+      })
+    )
+
     // Filter by date if requested
     if (filter) {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
-      return bookings.filter((booking: any) => {
-        const checkIn = new Date(booking.checkInDate)
-        const checkOut = new Date(booking.checkOutDate)
+      return enrichedBookings.filter((booking: any) => {
+        // Use startDate/endDate (from repository) or checkInDate/checkOutDate (legacy)
+        const checkIn = new Date(booking.startDate || booking.checkInDate)
+        const checkOut = new Date(booking.endDate || booking.checkOutDate)
 
         if (filter === 'past') {
           return checkOut < today
@@ -281,7 +405,7 @@ export class BookingService {
       })
     }
 
-    return bookings
+    return enrichedBookings
   }
 
   /**

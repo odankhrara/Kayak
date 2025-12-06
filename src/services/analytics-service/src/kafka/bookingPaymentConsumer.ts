@@ -1,7 +1,7 @@
-import { getConsumer } from '../../../common/src/kafka/kafkaClient'
-import { KAFKA_TOPICS } from '../../../common/src/kafka/topics'
-import { messageDeduplicator } from '../../../common/src/kafka/messageDeduplicator'
-import { redisCache } from '../../../common/src/cache/redisCache'
+import { getConsumer } from '@kayak/common/src/kafka/kafkaClient'
+import { KAFKA_TOPICS } from '@kayak/common/src/kafka/topics'
+import { messageDeduplicator } from '@kayak/common/src/kafka/messageDeduplicator'
+import { redisCache } from '@kayak/common/src/cache/redisCache'
 
 /**
  * Process booking created event
@@ -84,10 +84,16 @@ function getMessageId(event: any, topic: string): string {
 }
 
 async function start() {
-  // Connect to Redis
-  await redisCache.connect()
-  console.log('✅ Analytics service connected to Redis for aggregations')
+  // Connect to Redis (fail-fast, don't retry aggressively)
+  try {
+    await redisCache.connect()
+    console.log('✅ Analytics service connected to Redis for aggregations')
+  } catch (err: any) {
+    console.warn('⚠️  Redis connection failed:', err.message)
+    console.warn('⚠️  Continuing without Redis - some real-time features may be unavailable')
+  }
 
+  // Connect to Kafka (fail-fast, don't retry aggressively to avoid CPU overload)
   const consumer = await getConsumer('analytics-booking-billing')
 
   await consumer.subscribe({ topic: KAFKA_TOPICS.BOOKING_CREATED, fromBeginning: true })
@@ -155,11 +161,8 @@ async function start() {
 }
 
 start().catch((err) => {
-  console.error('Analytics consumer failed:', err)
-  process.exit(1)
-})
-
-start().catch((err) => {
-  console.error('Analytics consumer failed:', err)
-  process.exit(1)
+  console.error('Analytics Kafka consumer failed:', err.message)
+  console.warn('⚠️  Analytics will continue without Kafka consumer - some real-time features may be unavailable')
+  // Don't exit - let the service continue running for API endpoints
+  // No aggressive retries - this prevents CPU overload
 })

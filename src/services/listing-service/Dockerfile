@@ -1,5 +1,5 @@
 # Use an official Node.js runtime as a parent image
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Set the working directory in the container
 WORKDIR /app
@@ -10,6 +10,9 @@ RUN mkdir -p common listing-service
 # Copy package.json and package-lock.json for common
 COPY src/services/common/package*.json ./common/
 
+# Copy package.json and package-lock.json for listing-service
+COPY src/services/listing-service/package*.json ./listing-service
+
 # Install dependencies and build common module
 WORKDIR /app/common
 RUN npm install
@@ -17,11 +20,9 @@ COPY src/services/common/src ./src
 COPY src/services/common/tsconfig.json ./tsconfig.json
 RUN npm run build
 
-# Copy package.json and package-lock.json for listing-service
-WORKDIR /app/listing-service
-COPY src/services/listing-service/package*.json ./package.json
 
 # Install dependencies for listing-service
+WORKDIR /app/listing-service
 RUN npm install
 
 # Copy the rest of the listing-service module source code and tsconfig

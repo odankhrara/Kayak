@@ -43,12 +43,12 @@ const FavoriteButton = ({ itemType, itemId, className = '' }: FavoriteButtonProp
           (f) => f.item_type === itemType && f.item_id === itemId
         );
         if (favorite) {
-          await removeFavorite(favorite.favorite_id, user.user_id);
+          await removeFavorite(favorite.favorite_id, user.userId);
           setIsFavorited(false);
         }
       } else {
         // Add to favorites
-        await addFavorite(user.user_id, itemType, itemId);
+        await addFavorite(user.userId, itemType, itemId);
         setIsFavorited(true);
       }
     } catch (error) {

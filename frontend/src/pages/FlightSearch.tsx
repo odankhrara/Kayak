@@ -1,19 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plane, SlidersHorizontal, ArrowRight, Star, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Plane, SlidersHorizontal, ArrowRight, Star, Clock, Globe, Scale } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { flightService } from '../services/flight.service';
 import { Flight } from '../types';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
-import Loading, { SkeletonCard } from '../components/common/Loading';
+import { SkeletonCard } from '../components/common/Loading';
 import Select from '../components/common/Select';
 import Input from '../components/common/Input';
-import { formatCurrency, formatTime, formatDuration } from '../utils/formatters';
+import { formatCurrency, formatDuration } from '../utils/formatters';
 import { SORT_OPTIONS } from '../utils/constants';
 import { toast } from 'react-toastify';
 import { useAuthStore } from '../store/authStore';
+import { trackSearch, trackBookingAttempt } from '../utils/clickTracking';
+import FavoriteButton from '../components/favorites/FavoriteButton';
+import { ComparisonBar, ComparisonItem } from '../components/comparison';
+import { 
+  TIMEZONE_OPTIONS, 
+  getBrowserTimezone, 
+  formatTimeInTimezone, 
+  convertLocalTimeToUTC,
+  getTimezoneAbbreviation 
+} from '../utils/timezone';
 
 const FlightSearch = () => {
   const [searchParams] = useSearchParams();
@@ -26,6 +36,22 @@ const FlightSearch = () => {
   const [maxPrice, setMaxPrice] = useState('');
   const [airline, setAirline] = useState('');
   const [sortBy, setSortBy] = useState('price');
+  const [departureTimeFrom, setDepartureTimeFrom] = useState('');
+  const [departureTimeTo, setDepartureTimeTo] = useState('');
+  const [arrivalTimeFrom, setArrivalTimeFrom] = useState('');
+  const [arrivalTimeTo, setArrivalTimeTo] = useState('');
+  
+  // Comparison state
+  const [comparisonItems, setComparisonItems] = useState<ComparisonItem[]>([]);
+  
+  // Timezone selection - defaults to browser timezone
+  const [selectedTimezone, setSelectedTimezone] = useState(() => getBrowserTimezone());
+
+  // Convert local filter times to UTC for API query
+  const getUTCTimeFilter = (localTime: string): string | undefined => {
+    if (!localTime) return undefined;
+    return convertLocalTimeToUTC(localTime, selectedTimezone);
+  };
 
   const filters = {
     origin: searchParams.get('origin') || '',
@@ -36,6 +62,9 @@ const FlightSearch = () => {
     minPrice: minPrice ? parseFloat(minPrice) : undefined,
     maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
     airline,
+    // Convert filter times to UTC before sending to API
+    departureTimeMin: getUTCTimeFilter(departureTimeFrom),
+    departureTimeMax: getUTCTimeFilter(departureTimeTo),
     sortBy: sortBy as any,
     sortOrder: 'ASC' as const,
   };
@@ -46,7 +75,75 @@ const FlightSearch = () => {
     enabled: !!(filters.origin && filters.destination),
   });
 
+  // Track search results when flights are loaded
+  useEffect(() => {
+    if (flights && filters.origin && filters.destination) {
+      trackSearch({
+        type: 'flight',
+        origin: filters.origin,
+        destination: filters.destination,
+        departureDate: filters.departureDate,
+        passengers: filters.passengers,
+        class: filters.class,
+      }, flights.length);
+    }
+  }, [flights]);
+
+  // Extract unique airlines from search results
+  const uniqueAirlines = useMemo(() => {
+    if (!flights) return [];
+    const airlines = [...new Set(flights.map(f => f.airlineName))].filter(Boolean).sort();
+    return airlines;
+  }, [flights]);
+
+  // Comparison handlers
+  const isInComparison = (flightId: string) => {
+    return comparisonItems.some(item => item.id === flightId);
+  };
+
+  const toggleComparison = (flight: Flight) => {
+    if (isInComparison(flight.flightId)) {
+      setComparisonItems(items => items.filter(item => item.id !== flight.flightId));
+    } else {
+      if (comparisonItems.length >= 3) {
+        toast.warning('You can compare up to 3 flights at a time');
+        return;
+      }
+      const newItem: ComparisonItem = {
+        id: flight.flightId,
+        type: 'flight',
+        name: `${flight.departureAirport} → ${flight.arrivalAirport}`,
+        provider: flight.airlineName,
+        price: flight.pricePerTicket || flight.ticketPrice || 0,
+        rating: flight.rating || flight.flightRating,
+        details: {
+          flightClass: flight.flightClass,
+          durationMinutes: flight.durationMinutes,
+          availableSeats: flight.availableSeats,
+          departureTime: formatTimeInTimezone(flight.departureDatetime, selectedTimezone, false),
+          arrivalTime: formatTimeInTimezone(flight.arrivalDatetime, selectedTimezone, false),
+        }
+      };
+      setComparisonItems(items => [...items, newItem]);
+      toast.success(`Added ${flight.airlineName} to comparison`);
+    }
+  };
+
+  const removeFromComparison = (id: string) => {
+    setComparisonItems(items => items.filter(item => item.id !== id));
+  };
+
+  const clearComparison = () => {
+    setComparisonItems([]);
+  };
+
   const handleBookFlight = (flight: Flight) => {
+    // Track booking attempt
+    trackBookingAttempt(
+      flight.flightId,
+      'flight',
+      flight.pricePerTicket || flight.ticketPrice || 0
+    );
     if (!isAuthenticated) {
       toast.error('Please login to book this flight');
       navigate('/login', {
@@ -238,12 +335,78 @@ const FlightSearch = () => {
                   </div>
                 </div>
 
-                <Input
-                  label="Airline"
-                  placeholder="Filter by airline"
-                  value={airline}
-                  onChange={(e) => setAirline(e.target.value)}
-                />
+                {/* Airline Provider Filter */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    ✈️ Airline Provider
+                  </label>
+                  <select
+                    value={airline}
+                    onChange={(e) => setAirline(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">All Airlines</option>
+                    {uniqueAirlines.map((airlineName) => (
+                      <option key={airlineName} value={airlineName}>
+                        {airlineName}
+                      </option>
+                    ))}
+                  </select>
+                  {uniqueAirlines.length > 0 && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      {uniqueAirlines.length} airline{uniqueAirlines.length !== 1 ? 's' : ''} available
+                    </p>
+                  )}
+                </div>
+
+                {/* Timezone Selector */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    Display Timezone
+                  </label>
+                  <select
+                    value={selectedTimezone}
+                    onChange={(e) => setSelectedTimezone(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value={getBrowserTimezone()}>
+                      Local ({getTimezoneAbbreviation(getBrowserTimezone())})
+                    </option>
+                    <option value="UTC">UTC (Coordinated Universal Time)</option>
+                    {TIMEZONE_OPTIONS.filter(tz => tz.value !== 'UTC').map((tz) => (
+                      <option key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    All times shown in {getTimezoneAbbreviation(selectedTimezone)}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Departure Time ({getTimezoneAbbreviation(selectedTimezone)})
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="time"
+                      placeholder="From"
+                      value={departureTimeFrom}
+                      onChange={(e) => setDepartureTimeFrom(e.target.value)}
+                    />
+                    <Input
+                      type="time"
+                      placeholder="To"
+                      value={departureTimeTo}
+                      onChange={(e) => setDepartureTimeTo(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    e.g., 06:00 - 12:00 for morning flights in {getTimezoneAbbreviation(selectedTimezone)}
+                  </p>
+                </div>
 
                 <Button
                   variant="outline"
@@ -252,6 +415,10 @@ const FlightSearch = () => {
                     setMinPrice('');
                     setMaxPrice('');
                     setAirline('');
+                    setDepartureTimeFrom('');
+                    setDepartureTimeTo('');
+                    setArrivalTimeFrom('');
+                    setArrivalTimeTo('');
                     setSortBy('price');
                   }}
                 >
@@ -301,15 +468,38 @@ const FlightSearch = () => {
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   {/* Flight Info */}
                   <div className="flex-1 space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Plane className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-lg">{flight.airlineName}</span>
-                      <span className="text-sm text-slate-500">#{flight.flightId}</span>
+                    <div className="flex items-center justify-between">
+                      <div 
+                        className="flex items-center space-x-2 cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => navigate(`/flights/${flight.flightId}?passengers=${filters.passengers}&date=${filters.departureDate}`)}
+                      >
+                        <Plane className="w-5 h-5 text-blue-600" />
+                        <span className="font-semibold text-lg">{flight.airlineName}</span>
+                        <span className="text-sm text-slate-500">#{flight.flightId}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Compare Button */}
+                        <button
+                          onClick={() => toggleComparison(flight)}
+                          className={`p-2 rounded-lg transition-all ${
+                            isInComparison(flight.flightId)
+                              ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30'
+                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700'
+                          }`}
+                          title={isInComparison(flight.flightId) ? 'Remove from comparison' : 'Add to comparison'}
+                        >
+                          <Scale className="w-4 h-4" />
+                        </button>
+                        <FavoriteButton itemType="flight" itemId={flight.flightId} />
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-4">
+                    <div 
+                      className="flex items-center space-x-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 -m-2 transition-colors"
+                      onClick={() => navigate(`/flights/${flight.flightId}?passengers=${filters.passengers}&date=${filters.departureDate}`)}
+                    >
                       <div className="text-center">
-                        <p className="text-2xl font-bold">{formatTime(flight.departureDatetime)}</p>
+                        <p className="text-2xl font-bold">{formatTimeInTimezone(flight.departureDatetime, selectedTimezone, false)}</p>
                         <p className="text-sm text-slate-500">{flight.departureAirport}</p>
                       </div>
 
@@ -323,7 +513,7 @@ const FlightSearch = () => {
                       </div>
 
                       <div className="text-center">
-                        <p className="text-2xl font-bold">{formatTime(flight.arrivalDatetime)}</p>
+                        <p className="text-2xl font-bold">{formatTimeInTimezone(flight.arrivalDatetime, selectedTimezone, false)}</p>
                         <p className="text-sm text-slate-500">{flight.arrivalAirport}</p>
                       </div>
                     </div>
@@ -362,6 +552,18 @@ const FlightSearch = () => {
           ))}
         </div>
       </div>
+
+      {/* Comparison Bar */}
+      <AnimatePresence>
+        {comparisonItems.length > 0 && (
+          <ComparisonBar
+            items={comparisonItems}
+            onRemove={removeFromComparison}
+            onClear={clearComparison}
+            maxItems={3}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

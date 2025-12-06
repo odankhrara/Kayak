@@ -146,6 +146,7 @@ class BundleSummarizer:
         hotels: List[HotelDeal]
     ) -> str:
         from app.data.price_history import PriceHistoryTracker
+        price_tracker = PriceHistoryTracker(self.session)
         
         facts = []
         word_count = 0
@@ -154,13 +155,13 @@ class BundleSummarizer:
         if hotels:
             hotel = hotels[0]
             try:
-                # Get 30-day average price (using static method)
-                avg_price = PriceHistoryTracker.calculate_30_day_average(
+                # Get 30-day average price
+                avg_price = price_tracker.calculate_30_day_average(
                     self.session, "hotel", hotel.name
                 )
                 if not avg_price:
                     # Try by city
-                    avg_price = PriceHistoryTracker.calculate_30_day_average(
+                    avg_price = price_tracker.calculate_30_day_average(
                         self.session, "hotel", hotel.city
                     )
                 

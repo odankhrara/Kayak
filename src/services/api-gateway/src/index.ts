@@ -13,7 +13,6 @@ import { config } from './config/env'
 
 dotenv.config()
 
-console.log(config)
 const app = express()
 
 app.use(cors())

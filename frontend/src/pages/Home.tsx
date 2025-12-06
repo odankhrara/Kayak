@@ -4,11 +4,13 @@ import { Plane, Hotel, Car, Search, TrendingUp, Shield, Clock } from 'lucide-rea
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import Button from '../components/common/Button';
-import Input from '../components/common/Input';
 import Select from '../components/common/Select';
 import DatePicker from '../components/common/DatePicker';
-import { POPULAR_AIRPORTS, FLIGHT_CLASSES, POPULAR_CITIES, CAR_TYPES, PASSENGER_OPTIONS, GUEST_OPTIONS, ROOM_OPTIONS } from '../utils/constants';
+import LocationAutocomplete from '../components/common/LocationAutocomplete';
+import CarLocationAutocomplete from '../components/common/CarLocationAutocomplete';
+import { POPULAR_AIRPORTS, FLIGHT_CLASSES, CAR_TYPES, PASSENGER_OPTIONS, GUEST_OPTIONS, ROOM_OPTIONS } from '../utils/constants';
 import { useAuthStore } from '../store/authStore';
+import { trackSearch, trackClick } from '../utils/clickTracking';
 
 const Home = () => {
   const [activeTab, setActiveTab] = useState<'flights' | 'hotels' | 'cars'>('flights');
@@ -25,6 +27,7 @@ const Home = () => {
 
   // Hotel search state
   const [hotelCity, setHotelCity] = useState('');
+  const [hotelState, setHotelState] = useState('');
   const [hotelCheckIn, setHotelCheckIn] = useState('');
   const [hotelCheckOut, setHotelCheckOut] = useState('');
   const [hotelGuests, setHotelGuests] = useState('2');
@@ -32,11 +35,22 @@ const Home = () => {
 
   // Car search state
   const [carLocation, setCarLocation] = useState('');
+  const [carLocationDisplay, setCarLocationDisplay] = useState('');
   const [carPickupDate, setCarPickupDate] = useState('');
   const [carReturnDate, setCarReturnDate] = useState('');
   const [carType, setCarType] = useState('');
 
   const handleFlightSearch = () => {
+    // Track the search
+    trackSearch({
+      type: 'flight',
+      origin: flightOrigin,
+      destination: flightDestination,
+      departureDate: flightDepartureDate,
+      passengers: flightPassengers,
+      class: flightClass,
+    }, 0);
+    
     const params = new URLSearchParams({
       origin: flightOrigin,
       destination: flightDestination,
@@ -48,6 +62,12 @@ const Home = () => {
   };
 
   const handleHotelSearch = () => {
+    // Validate location is selected
+    if (!hotelCity || !hotelState) {
+      toast.error('Please select a location from the dropdown');
+      return;
+    }
+    
     // Validate check-out is after check-in
     if (hotelCheckIn && hotelCheckOut) {
       const checkInDateObj = new Date(hotelCheckIn);
@@ -59,8 +79,20 @@ const Home = () => {
       }
     }
     
+    // Track the search
+    trackSearch({
+      type: 'hotel',
+      city: hotelCity,
+      state: hotelState,
+      checkIn: hotelCheckIn,
+      checkOut: hotelCheckOut,
+      guests: hotelGuests,
+      rooms: hotelRooms,
+    }, 0);
+    
     const params = new URLSearchParams({
       city: hotelCity,
+      state: hotelState,
       checkIn: hotelCheckIn,
       checkOut: hotelCheckOut,
       guests: hotelGuests,
@@ -70,6 +102,21 @@ const Home = () => {
   };
 
   const handleCarSearch = () => {
+    // Validate location is selected
+    if (!carLocation) {
+      toast.error('Please select a location from the dropdown');
+      return;
+    }
+    
+    // Track the search
+    trackSearch({
+      type: 'car',
+      location: carLocation,
+      pickupDate: carPickupDate,
+      returnDate: carReturnDate,
+      carType: carType || 'any',
+    }, 0);
+    
     const params = new URLSearchParams({
       location: carLocation,
       pickupDate: carPickupDate,
@@ -120,7 +167,15 @@ const Home = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-8">
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => setActiveTab('flights')}
+                onClick={() => {
+                  setActiveTab('flights');
+                  trackClick({
+                    elementType: 'button',
+                    elementId: 'tab-flights',
+                    elementText: 'Flights',
+                    pageUrl: window.location.pathname,
+                  });
+                }}
                 className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
                   activeTab === 'flights'
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
@@ -141,7 +196,15 @@ const Home = () => {
                 <span>Flights</span>
               </button>
               <button
-                onClick={() => setActiveTab('hotels')}
+                onClick={() => {
+                  setActiveTab('hotels');
+                  trackClick({
+                    elementType: 'button',
+                    elementId: 'tab-hotels',
+                    elementText: 'Hotels',
+                    pageUrl: window.location.pathname,
+                  });
+                }}
                 className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
                   activeTab === 'hotels'
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
@@ -161,7 +224,15 @@ const Home = () => {
                 <span>Hotels</span>
               </button>
               <button
-                onClick={() => setActiveTab('cars')}
+                onClick={() => {
+                  setActiveTab('cars');
+                  trackClick({
+                    elementType: 'button',
+                    elementId: 'tab-cars',
+                    elementText: 'Cars',
+                    pageUrl: window.location.pathname,
+                  });
+                }}
                 className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
                   activeTab === 'cars'
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
@@ -241,11 +312,14 @@ const Home = () => {
             {/* Hotel Search Form */}
             {activeTab === 'hotels' && (
               <div className="space-y-6">
-                <Input
-                  label="City or Destination"
-                  value={hotelCity}
-                  onChange={(e) => setHotelCity(e.target.value)}
-                  placeholder="Enter city name"
+                <LocationAutocomplete
+                  value={hotelCity ? `${hotelCity}, ${hotelState}` : ''}
+                  onChange={(city, state) => {
+                    setHotelCity(city);
+                    setHotelState(state);
+                  }}
+                  placeholder="Search cities with hotels..."
+                  label="Destination"
                   required
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -288,7 +362,7 @@ const Home = () => {
                   onClick={handleHotelSearch}
                   fullWidth
                   size="lg"
-                  disabled={!hotelCity || !hotelCheckIn || !hotelCheckOut}
+                  disabled={!hotelCity || !hotelState || !hotelCheckIn || !hotelCheckOut}
                 >
                   <Search className="w-5 h-5 mr-2" />
                   Search Hotels
@@ -299,11 +373,14 @@ const Home = () => {
             {/* Car Search Form */}
             {activeTab === 'cars' && (
               <div className="space-y-6">
-                <Input
-                  label="Pickup Location"
-                  value={carLocation}
-                  onChange={(e) => setCarLocation(e.target.value)}
-                  placeholder="Enter city or airport"
+                <CarLocationAutocomplete
+                  value={carLocationDisplay}
+                  onChange={(location) => {
+                    setCarLocation(location);
+                    setCarLocationDisplay(location);
+                  }}
+                  placeholder="Search locations with rental cars..."
+                  label="Pick-up Location"
                   required
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

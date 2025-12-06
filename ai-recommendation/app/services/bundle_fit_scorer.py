@@ -16,7 +16,7 @@ class BundleFitScorer:
     
     def __init__(self, session: Session):
         self.session = session
-        # PriceHistoryTracker uses static methods, no need to instantiate
+        self.price_tracker = PriceHistoryTracker(session)
     
     def compute_fit_score(
         self,

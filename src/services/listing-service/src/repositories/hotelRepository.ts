@@ -3,6 +3,31 @@ import { Hotel } from '../models/Hotel'
 
 export class HotelRepository {
   /**
+   * Get all unique city-state combinations for autocomplete
+   */
+  async getLocations(searchTerm?: string): Promise<{ city: string; state: string; hotelCount: number }[]> {
+    let query = `
+      SELECT city, state, COUNT(*) as hotel_count
+      FROM hotels
+      WHERE status = 'active'
+    `
+    const params: any[] = []
+
+    if (searchTerm) {
+      query += ` AND (LOWER(city) LIKE LOWER(?) OR LOWER(state) LIKE LOWER(?))`
+      params.push(`%${searchTerm}%`, `%${searchTerm}%`)
+    }
+
+    query += ` GROUP BY city, state ORDER BY hotel_count DESC, city ASC LIMIT 50`
+
+    const [rows] = await mysqlPool.query(query, params)
+    return (rows as any[]).map(row => ({
+      city: row.city,
+      state: row.state,
+      hotelCount: row.hotel_count
+    }))
+  }
+  /**
    * Search hotels with comprehensive filters including room availability
    */
   async search(filters: {
@@ -115,17 +140,25 @@ export class HotelRepository {
     query += ' GROUP BY h.hotel_id'
 
     // Price filters (applied after grouping)
-    if (filters.minPrice) {
-      query += ' HAVING MIN(r.price_per_night) >= ?'
-      params.push(filters.minPrice)
-    }
-    if (filters.maxPrice) {
+    // Filter by the CHEAPEST available room price at each hotel
+    // This way, if a hotel has a $125 room AND a $300 suite, 
+    // filtering for $50-$150 will still show the hotel (for the $125 room)
+    if (filters.minPrice || filters.maxPrice) {
+      const havingConditions: string[] = []
+      
       if (filters.minPrice) {
-        query += ' AND MAX(r.price_per_night) <= ?'
-      } else {
-        query += ' HAVING MAX(r.price_per_night) <= ?'
+        havingConditions.push('MIN(r.price_per_night) >= ?')
+        params.push(filters.minPrice)
       }
-      params.push(filters.maxPrice)
+      if (filters.maxPrice) {
+        // Use MIN price for maxPrice filter - show hotels that have at least one room <= maxPrice
+        havingConditions.push('MIN(r.price_per_night) <= ?')
+        params.push(filters.maxPrice)
+      }
+      
+      if (havingConditions.length > 0) {
+        query += ' HAVING ' + havingConditions.join(' AND ')
+      }
     }
 
     // Sorting
@@ -144,9 +177,10 @@ export class HotelRepository {
     const [rows] = await mysqlPool.query(query, params)
     
     // Fetch rooms and amenities for each hotel
+    // Pass guest filter to only show rooms that can accommodate the requested guests
     const hotels = []
     for (const row of rows as any[]) {
-      const hotel = await this.getHotelWithDetails(row.hotel_id)
+      const hotel = await this.getHotelWithDetails(row.hotel_id, filters.guests)
       if (hotel) {
         hotels.push({
           ...hotel,
@@ -168,8 +202,10 @@ export class HotelRepository {
 
   /**
    * Get hotel with complete details (rooms and amenities)
+   * @param hotelId - Hotel ID
+   * @param minGuests - Optional minimum guest capacity filter for rooms
    */
-  private async getHotelWithDetails(hotelId: string): Promise<any | null> {
+  private async getHotelWithDetails(hotelId: string, minGuests?: number): Promise<any | null> {
     // Get hotel basic info
     const [hotelRows] = await mysqlPool.query(
       'SELECT * FROM hotels WHERE hotel_id = ?',
@@ -179,11 +215,17 @@ export class HotelRepository {
     if ((hotelRows as any[]).length === 0) return null
     const hotel = (hotelRows as any[])[0]
 
-    // Get rooms
-    const [roomRows] = await mysqlPool.query(
-      'SELECT * FROM hotel_rooms WHERE hotel_id = ? ORDER BY price_per_night ASC',
-      [hotelId]
-    )
+    // Get rooms - filter by guest capacity if specified
+    let roomQuery = 'SELECT * FROM hotel_rooms WHERE hotel_id = ?'
+    const roomParams: any[] = [hotelId]
+    
+    if (minGuests && minGuests > 0) {
+      roomQuery += ' AND max_guests >= ?'
+      roomParams.push(minGuests)
+    }
+    roomQuery += ' ORDER BY price_per_night ASC'
+    
+    const [roomRows] = await mysqlPool.query(roomQuery, roomParams)
 
     // Get amenities
     const [amenityRows] = await mysqlPool.query(

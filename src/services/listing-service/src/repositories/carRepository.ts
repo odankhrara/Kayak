@@ -3,6 +3,30 @@ import { Car } from '../models/Car'
 
 export class CarRepository {
   /**
+   * Get all unique locations for autocomplete
+   */
+  async getLocations(searchTerm?: string): Promise<{ location: string; carCount: number }[]> {
+    let query = `
+      SELECT location, COUNT(*) as car_count
+      FROM cars
+      WHERE available = true
+    `
+    const params: any[] = []
+
+    if (searchTerm) {
+      query += ` AND LOWER(location) LIKE LOWER(?)`
+      params.push(`%${searchTerm}%`)
+    }
+
+    query += ` GROUP BY location ORDER BY car_count DESC, location ASC LIMIT 50`
+
+    const [rows] = await mysqlPool.query(query, params)
+    return (rows as any[]).map(row => ({
+      location: row.location,
+      carCount: row.car_count
+    }))
+  }
+  /**
    * Search cars with filters
    */
   async search(filters: {

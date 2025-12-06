@@ -5,6 +5,13 @@ export class CarService {
   private repository = new CarRepository()
 
   /**
+   * Get all unique locations for autocomplete
+   */
+  async getLocations(searchTerm?: string): Promise<{ location: string; carCount: number }[]> {
+    return this.repository.getLocations(searchTerm)
+  }
+
+  /**
    * Validate dates
    */
   private validateDates(pickupDate: string, returnDate: string): void {

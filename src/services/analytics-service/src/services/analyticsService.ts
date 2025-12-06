@@ -1,6 +1,234 @@
 import { getMongoDb } from '@kayak/common/src/db/mongoClient'
+import mysqlPool from '@kayak/common/src/db/mysqlPool'
 
 export class AnalyticsService {
+  // ============================================
+  // PROVIDER ANALYTICS METHODS (Phase 1)
+  // ============================================
+
+  /**
+   * Get top airlines by revenue
+   */
+  async getTopAirlinesByRevenue(year?: number, limit: number = 10): Promise<any[]> {
+    const targetYear = year || new Date().getFullYear()
+    
+    const query = `
+      SELECT 
+        f.airline_name AS provider,
+        COUNT(DISTINCT b.booking_id) AS total_bookings,
+        SUM(bill.total_amount) AS total_revenue,
+        AVG(f.rating) AS avg_rating,
+        COUNT(DISTINCT f.flight_id) AS total_flights
+      FROM flights f
+      LEFT JOIN bookings b ON f.flight_id = b.booking_reference 
+        AND b.booking_type = 'flight'
+        AND YEAR(b.booking_date) = ?
+      LEFT JOIN billing bill ON b.booking_id = bill.booking_id
+        AND bill.transaction_status = 'completed'
+      GROUP BY f.airline_name
+      ORDER BY total_revenue DESC
+      LIMIT ?
+    `
+    
+    const [rows] = await mysqlPool.query(query, [targetYear, limit])
+    return (rows as any[]).map(row => ({
+      provider: row.provider,
+      totalBookings: row.total_bookings || 0,
+      totalRevenue: parseFloat(row.total_revenue) || 0,
+      avgRating: parseFloat(row.avg_rating) || 0,
+      totalFlights: row.total_flights || 0
+    }))
+  }
+
+  /**
+   * Get top hotel chains by bookings
+   */
+  async getTopHotelsByBookings(year?: number, limit: number = 10): Promise<any[]> {
+    const targetYear = year || new Date().getFullYear()
+    
+    // Extract hotel chain from hotel_name (e.g., "Hilton San Jose" -> "Hilton")
+    const query = `
+      SELECT 
+        SUBSTRING_INDEX(h.hotel_name, ' ', 1) AS provider,
+        COUNT(DISTINCT b.booking_id) AS total_bookings,
+        SUM(bill.total_amount) AS total_revenue,
+        AVG(h.rating) AS avg_rating,
+        COUNT(DISTINCT h.hotel_id) AS total_properties,
+        AVG(h.star_rating) AS avg_stars
+      FROM hotels h
+      LEFT JOIN bookings b ON h.hotel_id = b.booking_reference 
+        AND b.booking_type = 'hotel'
+        AND YEAR(b.booking_date) = ?
+      LEFT JOIN billing bill ON b.booking_id = bill.booking_id
+        AND bill.transaction_status = 'completed'
+      GROUP BY SUBSTRING_INDEX(h.hotel_name, ' ', 1)
+      ORDER BY total_bookings DESC
+      LIMIT ?
+    `
+    
+    const [rows] = await mysqlPool.query(query, [targetYear, limit])
+    return (rows as any[]).map(row => ({
+      provider: row.provider,
+      totalBookings: row.total_bookings || 0,
+      totalRevenue: parseFloat(row.total_revenue) || 0,
+      avgRating: parseFloat(row.avg_rating) || 0,
+      totalProperties: row.total_properties || 0,
+      avgStars: parseFloat(row.avg_stars) || 0
+    }))
+  }
+
+  /**
+   * Get top car rental companies by rentals
+   */
+  async getTopCarCompaniesByRentals(year?: number, limit: number = 10): Promise<any[]> {
+    const targetYear = year || new Date().getFullYear()
+    
+    const query = `
+      SELECT 
+        c.company_name AS provider,
+        COUNT(DISTINCT b.booking_id) AS total_rentals,
+        SUM(bill.total_amount) AS total_revenue,
+        AVG(c.rating) AS avg_rating,
+        COUNT(DISTINCT c.car_id) AS total_vehicles
+      FROM cars c
+      LEFT JOIN bookings b ON c.car_id = b.booking_reference 
+        AND b.booking_type = 'car'
+        AND YEAR(b.booking_date) = ?
+      LEFT JOIN billing bill ON b.booking_id = bill.booking_id
+        AND bill.transaction_status = 'completed'
+      GROUP BY c.company_name
+      ORDER BY total_rentals DESC
+      LIMIT ?
+    `
+    
+    const [rows] = await mysqlPool.query(query, [targetYear, limit])
+    return (rows as any[]).map(row => ({
+      provider: row.provider,
+      totalRentals: row.total_rentals || 0,
+      totalRevenue: parseFloat(row.total_revenue) || 0,
+      avgRating: parseFloat(row.avg_rating) || 0,
+      totalVehicles: row.total_vehicles || 0
+    }))
+  }
+
+  /**
+   * Get all providers summary (airlines, hotels, car companies)
+   */
+  async getProvidersSummary(year?: number): Promise<any> {
+    const [airlines, hotels, carCompanies] = await Promise.all([
+      this.getTopAirlinesByRevenue(year, 10),
+      this.getTopHotelsByBookings(year, 10),
+      this.getTopCarCompaniesByRentals(year, 10)
+    ])
+
+    // Calculate totals
+    const totalAirlineRevenue = airlines.reduce((sum, a) => sum + a.totalRevenue, 0)
+    const totalHotelRevenue = hotels.reduce((sum, h) => sum + h.totalRevenue, 0)
+    const totalCarRevenue = carCompanies.reduce((sum, c) => sum + c.totalRevenue, 0)
+
+    return {
+      airlines: {
+        providers: airlines,
+        totalRevenue: totalAirlineRevenue,
+        totalProviders: airlines.length
+      },
+      hotels: {
+        providers: hotels,
+        totalRevenue: totalHotelRevenue,
+        totalProviders: hotels.length
+      },
+      carCompanies: {
+        providers: carCompanies,
+        totalRevenue: totalCarRevenue,
+        totalProviders: carCompanies.length
+      },
+      grandTotal: totalAirlineRevenue + totalHotelRevenue + totalCarRevenue
+    }
+  }
+
+  /**
+   * Get provider revenue over time (monthly breakdown)
+   */
+  async getProviderRevenueOverTime(providerType: 'airline' | 'hotel' | 'car', providerName?: string, year?: number): Promise<any[]> {
+    const targetYear = year || new Date().getFullYear()
+    
+    let query = ''
+    const params: any[] = [targetYear]
+    
+    if (providerType === 'airline') {
+      query = `
+        SELECT 
+          MONTH(b.booking_date) AS month,
+          f.airline_name AS provider,
+          COUNT(DISTINCT b.booking_id) AS bookings,
+          SUM(bill.total_amount) AS revenue
+        FROM bookings b
+        JOIN flights f ON f.flight_id = b.booking_reference AND b.booking_type = 'flight'
+        JOIN billing bill ON b.booking_id = bill.booking_id AND bill.transaction_status = 'completed'
+        WHERE YEAR(b.booking_date) = ?
+        ${providerName ? 'AND f.airline_name = ?' : ''}
+        GROUP BY MONTH(b.booking_date), f.airline_name
+        ORDER BY month, provider
+      `
+    } else if (providerType === 'hotel') {
+      query = `
+        SELECT 
+          MONTH(b.booking_date) AS month,
+          SUBSTRING_INDEX(h.hotel_name, ' ', 1) AS provider,
+          COUNT(DISTINCT b.booking_id) AS bookings,
+          SUM(bill.total_amount) AS revenue
+        FROM bookings b
+        JOIN hotels h ON h.hotel_id = b.booking_reference AND b.booking_type = 'hotel'
+        JOIN billing bill ON b.booking_id = bill.booking_id AND bill.transaction_status = 'completed'
+        WHERE YEAR(b.booking_date) = ?
+        ${providerName ? 'AND SUBSTRING_INDEX(h.hotel_name, \' \', 1) = ?' : ''}
+        GROUP BY MONTH(b.booking_date), SUBSTRING_INDEX(h.hotel_name, ' ', 1)
+        ORDER BY month, provider
+      `
+    } else {
+      query = `
+        SELECT 
+          MONTH(b.booking_date) AS month,
+          c.company_name AS provider,
+          COUNT(DISTINCT b.booking_id) AS bookings,
+          SUM(bill.total_amount) AS revenue
+        FROM bookings b
+        JOIN cars c ON c.car_id = b.booking_reference AND b.booking_type = 'car'
+        JOIN billing bill ON b.booking_id = bill.booking_id AND bill.transaction_status = 'completed'
+        WHERE YEAR(b.booking_date) = ?
+        ${providerName ? 'AND c.company_name = ?' : ''}
+        GROUP BY MONTH(b.booking_date), c.company_name
+        ORDER BY month, provider
+      `
+    }
+    
+    if (providerName) {
+      params.push(providerName)
+    }
+    
+    const [rows] = await mysqlPool.query(query, params)
+    return (rows as any[]).map(row => ({
+      month: row.month,
+      provider: row.provider,
+      bookings: row.bookings || 0,
+      revenue: parseFloat(row.revenue) || 0
+    }))
+  }
+
+  /**
+   * Get distinct providers list
+   */
+  async getProvidersList(): Promise<any> {
+    const [airlines] = await mysqlPool.query('SELECT DISTINCT airline_name FROM flights ORDER BY airline_name')
+    const [hotels] = await mysqlPool.query('SELECT DISTINCT SUBSTRING_INDEX(hotel_name, \' \', 1) AS chain FROM hotels ORDER BY chain')
+    const [carCompanies] = await mysqlPool.query('SELECT DISTINCT company_name FROM cars ORDER BY company_name')
+    
+    return {
+      airlines: (airlines as any[]).map(r => r.airline_name),
+      hotelChains: (hotels as any[]).map(r => r.chain),
+      carCompanies: (carCompanies as any[]).map(r => r.company_name)
+    }
+  }
   async getRevenueByCity(year: number) {
     const db = await getMongoDb()
     const collection = db.collection('analytics_aggregates')
@@ -69,20 +297,26 @@ export class AnalyticsService {
   }
 
   // Host/Provider Analysis Methods
-  async getClicksPerPage(startDate?: Date, endDate?: Date) {
+  async getClicksPerPage(startDate?: Date, endDate?: Date, propertyType?: 'hotel' | 'flight' | 'car') {
     const db = await getMongoDb()
     const logsCollection = db.collection('logs')
     
     const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Default: last 30 days
     const end = endDate || new Date()
     
+    // Build match filter
+    const matchFilter: any = {
+      log_type: 'click',
+      timestamp: { $gte: start, $lte: end }
+    }
+    
+    // Filter by property type if specified
+    if (propertyType) {
+      matchFilter.page_url = { $regex: new RegExp(`/${propertyType}s?(/|$)`, 'i') }
+    }
+    
     const pipeline = [
-      {
-        $match: {
-          log_type: 'click',
-          timestamp: { $gte: start, $lte: end }
-        }
-      },
+      { $match: matchFilter },
       {
         $group: {
           _id: '$page_url',
@@ -99,6 +333,9 @@ export class AnalyticsService {
       },
       {
         $sort: { clicks: -1 }
+      },
+      {
+        $limit: 20
       }
     ]
     
@@ -117,19 +354,32 @@ export class AnalyticsService {
     const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const end = endDate || new Date()
     
+    // First try to get clicks on property pages (flights/hotels/cars detail pages)
     const pipeline = [
       {
         $match: {
           log_type: 'click',
-          'element_type': { $in: ['card', 'listing', 'property'] },
-          timestamp: { $gte: start, $lte: end }
+          timestamp: { $gte: start, $lte: end },
+          // Look for clicks on property detail pages or booking actions
+          $or: [
+            { page_url: { $regex: /^\/(flights|hotels|cars)\/[^/]+/ } },
+            { element_type: { $in: ['card', 'listing', 'property', 'link'] } },
+            { element_id: { $regex: /^(flight|hotel|car|book|favorite)/ } }
+          ]
         }
       },
       {
         $group: {
-          _id: '$element_id',
+          _id: {
+            // Group by page URL for property pages, or element_id for other clicks
+            $cond: [
+              { $regexMatch: { input: '$page_url', regex: /^\/(flights|hotels|cars)\/[^/]+/ } },
+              '$page_url',
+              '$element_id'
+            ]
+          },
           clicks: { $sum: 1 },
-          propertyName: { $first: '$element_text' },
+          propertyName: { $first: { $ifNull: ['$element_text', '$page_title'] } },
           pageUrl: { $first: '$page_url' }
         }
       },
@@ -201,55 +451,46 @@ export class AnalyticsService {
   }
 
   async getPropertyReviews(propertyType?: 'hotel' | 'flight' | 'car') {
-    const db = await getMongoDb()
-    const reviewsCollection = db.collection('reviews')
+    // Query reviews from MySQL (where they are actually stored)
+    let query = `
+      SELECT 
+        r.item_id AS property_id,
+        r.item_type AS property_type,
+        CASE 
+          WHEN r.item_type = 'hotel' THEN h.hotel_name
+          WHEN r.item_type = 'car' THEN CONCAT(c.model, ' (', c.company_name, ')')
+          WHEN r.item_type = 'flight' THEN f.airline_name
+          ELSE 'Unknown'
+        END AS property_name,
+        ROUND(AVG(r.rating), 2) AS average_rating,
+        COUNT(*) AS review_count
+      FROM reviews r
+      LEFT JOIN hotels h ON r.item_type = 'hotel' AND r.item_id = h.hotel_id
+      LEFT JOIN cars c ON r.item_type = 'car' AND r.item_id = c.car_id
+      LEFT JOIN flights f ON r.item_type = 'flight' AND r.item_id = f.flight_id
+      WHERE r.status = 'approved'
+    `
     
-    const matchFilter: any = {}
+    const params: any[] = []
     if (propertyType) {
-      matchFilter.property_type = propertyType
+      query += ` AND r.item_type = ?`
+      params.push(propertyType)
     }
     
-    const pipeline = [
-      { $match: matchFilter },
-      {
-        $group: {
-          _id: '$property_id',
-          propertyName: { $first: '$property_name' },
-          averageRating: { $avg: '$rating' },
-          reviewCount: { $sum: 1 },
-          ratings: {
-            $push: {
-              rating: '$rating',
-              comment: '$comment',
-              date: '$review_date'
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          propertyId: '$_id',
-          propertyName: 1,
-          averageRating: { $round: ['$averageRating', 2] },
-          reviewCount: 1,
-          ratings: { $slice: ['$ratings', 5] } // Last 5 reviews
-        }
-      },
-      {
-        $sort: { reviewCount: -1 }
-      },
-      {
-        $limit: 20
-      }
-    ]
+    query += `
+      GROUP BY r.item_id, r.item_type, property_name
+      ORDER BY review_count DESC, average_rating DESC
+      LIMIT 20
+    `
     
-    const results = await reviewsCollection.aggregate(pipeline).toArray()
-    return results.map((r: any) => ({
-      propertyId: r.propertyId,
-      propertyName: r.propertyName || 'Unknown Property',
-      averageRating: r.averageRating,
-      reviewCount: r.reviewCount,
-      ratings: r.ratings || []
+    const [rows] = await mysqlPool.query(query, params)
+    
+    return (rows as any[]).map(row => ({
+      propertyId: row.property_id,
+      propertyType: row.property_type,
+      propertyName: row.property_name || 'Unknown Property',
+      averageRating: parseFloat(row.average_rating) || 0,
+      reviewCount: row.review_count
     }))
   }
 

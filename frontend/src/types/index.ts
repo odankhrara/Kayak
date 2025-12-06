@@ -166,19 +166,32 @@ export interface Booking {
   updatedAt?: string;
 }
 
+export interface RoomSelectionData {
+  roomType: string;
+  quantity: number;
+  pricePerNight: number;
+  maxGuests: number;
+}
+
 export interface CreateBookingData {
   bookingType: 'flight' | 'hotel' | 'car';
   entityId: string;
-  quantity: number;
+  quantity?: number; // Optional for multi-room bookings where it's calculated from roomSelections
   checkInDate: string;
   checkOutDate: string;
   totalAmount: number;
   paymentMethod: 'credit_card' | 'debit_card' | 'paypal';
   paymentDetails: PaymentDetails;
+  // Optional bid-related fields for completing accepted bids
+  bidId?: number;
+  originalPrice?: number;
+  // Optional: room selections for multi-room hotel bookings
+  roomSelections?: RoomSelectionData[];
 }
 
 export interface PaymentDetails {
   cardNumber?: string;
+  cardHolderName?: string;
   cvv?: string;
   expiryDate?: string;
   paypalEmail?: string;

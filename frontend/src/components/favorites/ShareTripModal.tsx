@@ -21,7 +21,7 @@ const ShareTripModal = ({ favoriteId, onClose }: ShareTripModalProps) => {
     
     setIsLoading(true);
     try {
-      const url = await shareTrip(favoriteId, user.user_id, 30); // 30 days expiration
+      const url = await shareTrip(favoriteId, user.userId, 30); // 30 days expiration
       setShareUrl(url);
       toast.success('Share link created!');
     } catch (error) {
