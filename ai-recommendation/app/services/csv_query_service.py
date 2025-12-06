@@ -21,8 +21,8 @@ class CSVQueryService:
         Args:
             index_db_path: Path to SQLite index database or MySQL connection string
         """
-        # Determine database type
-        self.use_mysql = os.getenv("USE_MYSQL", "false").lower() == "true"
+        # Determine database type (MySQL is default for AI services)
+        self.use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
         self.index_db_path = index_db_path or os.getenv("CSV_INDEX_DB", "./csv_index.db")
         
         # Initialize connection

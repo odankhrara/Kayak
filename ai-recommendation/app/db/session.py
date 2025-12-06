@@ -14,12 +14,12 @@ mysql_database = os.getenv("MYSQL_DATABASE", "kayak")
 # Use MySQL if DATABASE_URL is set, otherwise construct from env vars
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    # Construct MySQL URL from environment variables
+    # Construct MySQL URL from environment variables (MySQL is default)
     use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
     if use_mysql:
         DATABASE_URL = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}"
     else:
-        # Fallback to SQLite
+        # SQLite fallback (only if explicitly disabled MySQL)
         DATABASE_URL = "sqlite:///./ai_recommendations.db"
 
 # Create engine with MySQL-specific settings

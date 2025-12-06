@@ -38,8 +38,8 @@ class CSVDataIndexer:
             data_dir = os.getenv("DATASETS_DIR", "./data/raw")
         self.data_dir = Path(data_dir)
         
-        # Determine database type and connection
-        self.use_mysql = os.getenv("USE_MYSQL", "false").lower() == "true"
+        # Determine database type and connection (MySQL is default for AI services)
+        self.use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
         self.index_db_path = index_db_path or os.getenv("CSV_INDEX_DB", "./csv_index.db")
         
         # Initialize database connection
