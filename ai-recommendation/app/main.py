@@ -90,6 +90,19 @@ async def lifespan(app: FastAPI):
     global ingestion_worker, deal_scanner, feed_scheduler
     global normalization_worker, deal_detector_worker, offer_tagger_worker, event_emitter
     
+    # Initialize proactive concierge for adaptive, proactive recommendations
+    try:
+        from app.services.proactive_concierge import ProactiveConcierge
+        from app.db.session import get_session
+        session_gen = get_session()
+        proactive_session = next(session_gen)
+        proactive_concierge = ProactiveConcierge(proactive_session, check_interval_minutes=2)
+        proactive_task = asyncio.create_task(proactive_concierge.start_proactive_monitoring())
+        background_tasks.append(proactive_task)
+        print("✅ Proactive concierge started (adaptive recommendations)")
+    except Exception as e:
+        print(f"⚠️  Proactive concierge not started: {e}")
+    
     # Start workers in background (non-blocking) - create tasks without awaiting
     try:
         feed_scheduler = FeedIngestionScheduler(ingestion_interval_minutes=30)
@@ -192,9 +205,9 @@ app.include_router(bundles_router)
 app.include_router(watches_router)
 app.include_router(chat_router)
 try:
-    if datasets_router:
-        app.include_router(datasets_router)
-except NameError:
+    from app.api import datasets_router
+    app.include_router(datasets_router)
+except ImportError:
     pass  # datasets_router not available
 app.include_router(websocket_router)
 

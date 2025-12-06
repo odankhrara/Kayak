@@ -413,15 +413,24 @@ class ConciergeAgent:
         bundle: Bundle,
         flights: List[FlightDeal],
         hotels: List[HotelDeal],
-        alternatives: Optional[List[Bundle]] = None
+        alternatives: Optional[List[Bundle]] = None,
+        user_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Explain tradeoffs and reasoning for bundle recommendations
         
         This makes the concierge explain WHY it chose certain deals,
-        helping users understand the value proposition.
+        helping users understand the value proposition. The explanation
+        adapts based on user context and preferences.
         
         Uses Groq (preferred) or Ollama for intelligent explanations if available.
+        
+        Args:
+            bundle: The recommended bundle
+            flights: List of flight deals in the bundle
+            hotels: List of hotel deals in the bundle
+            alternatives: Alternative bundles for comparison
+            user_context: User's conversation context for personalized explanations
         """
         # Try Groq first if available (preferred)
         if self.use_groq and self.groq_service:
@@ -450,8 +459,16 @@ class ConciergeAgent:
                     for h in hotels
                 ]
                 
+                # Include user context in explanation if available
+                context_prompt = ""
+                if user_context:
+                    if user_context.get('constraints'):
+                        context_prompt = f"\nUser preferences: {', '.join(user_context.get('constraints', []))}"
+                    if user_context.get('budget'):
+                        context_prompt += f"\nBudget: ${user_context.get('budget'):.2f}"
+                
                 explanation = self.groq_service.generate_explanation(
-                    bundle_info, flights_info, hotels_info
+                    bundle_info, flights_info, hotels_info, context=context_prompt
                 )
                 if explanation and not explanation.startswith("I'm currently using"):
                     return explanation
@@ -485,8 +502,16 @@ class ConciergeAgent:
                     for h in hotels
                 ]
                 
+                # Include user context in explanation if available
+                context_prompt = ""
+                if user_context:
+                    if user_context.get('constraints'):
+                        context_prompt = f"\nUser preferences: {', '.join(user_context.get('constraints', []))}"
+                    if user_context.get('budget'):
+                        context_prompt += f"\nBudget: ${user_context.get('budget'):.2f}"
+                
                 explanation = self.ollama_service.generate_explanation(
-                    bundle_info, flights_info, hotels_info
+                    bundle_info, flights_info, hotels_info, context=context_prompt
                 )
                 if explanation and not explanation.startswith("I'm currently using"):
                     return explanation

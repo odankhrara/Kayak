@@ -4,6 +4,8 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import os
 import json
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 
 class CSVQueryService:
@@ -17,22 +19,88 @@ class CSVQueryService:
         Initialize CSV query service
         
         Args:
-            index_db_path: Path to SQLite index database
+            index_db_path: Path to SQLite index database or MySQL connection string
         """
-        if index_db_path is None:
-            index_db_path = os.getenv("CSV_INDEX_DB", "./csv_index.db")
-        self.index_db_path = index_db_path
+        # Determine database type
+        self.use_mysql = os.getenv("USE_MYSQL", "false").lower() == "true"
+        self.index_db_path = index_db_path or os.getenv("CSV_INDEX_DB", "./csv_index.db")
+        
+        # Initialize connection
         self.index_db = None
+        self.engine = None
+        self.Session = None
         self._connect()
     
     def _connect(self):
-        """Connect to index database"""
-        if Path(self.index_db_path).exists():
-            self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
-            self.index_db.row_factory = sqlite3.Row
+        """Connect to index database (SQLite or MySQL)"""
+        if self.use_mysql:
+            # Use MySQL - construct connection string from environment variables
+            mysql_host = os.getenv("MYSQL_HOST", "localhost")
+            mysql_port = os.getenv("MYSQL_PORT", "3307")
+            mysql_user = os.getenv("MYSQL_USER", "root")
+            mysql_password = os.getenv("MYSQL_PASSWORD", "password")
+            mysql_database = os.getenv("MYSQL_DATABASE", "kayak")
+            
+            # Use same database name pattern as indexer
+            csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{mysql_database}_csv_index")
+            database_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{csv_db_name}"
+            
+            try:
+                self.engine = create_engine(
+                    database_url,
+                    echo=False,
+                    pool_pre_ping=True,
+                    pool_recycle=3600
+                )
+                self.index_db = self.engine.connect()
+                print(f"✅ Connected to MySQL CSV index: {csv_db_name}")
+            except Exception as e:
+                print(f"⚠️  Failed to connect to MySQL CSV index: {e}")
+                self.index_db = None
         else:
-            print(f"⚠️  Index database not found at {self.index_db_path}. Run indexer first.")
-            self.index_db = None
+            # Use SQLite (default)
+            if Path(self.index_db_path).exists():
+                self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
+                self.index_db.row_factory = sqlite3.Row
+                print(f"✅ Connected to SQLite CSV index: {self.index_db_path}")
+            else:
+                print(f"⚠️  Index database not found at {self.index_db_path}. Run indexer first.")
+                self.index_db = None
+    
+    def _execute_query(self, query: str, params: List[Any] = None) -> List[Any]:
+        """
+        Execute query and return results (works for both SQLite and MySQL)
+        
+        Args:
+            query: SQL query string
+            params: Query parameters
+            
+        Returns:
+            List of result rows
+        """
+        if not self.index_db:
+            return []
+        
+        # Convert SQLite placeholders (?) to MySQL placeholders (%s) if needed
+        if self.use_mysql and params:
+            query = query.replace("?", "%s")
+            result = self.index_db.execute(text(query), params)
+            # Convert result to list of dicts
+            columns = result.keys()
+            return [dict(zip(columns, row)) for row in result.fetchall()]
+        else:
+            # SQLite
+            cursor = self.index_db.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            rows = cursor.fetchall()
+            # Convert Row objects to dicts
+            if rows and hasattr(rows[0], 'keys'):
+                return [dict(row) for row in rows]
+            else:
+                return [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
     
     def search_hotels(
         self,
@@ -56,7 +124,6 @@ class CSVQueryService:
         if not self.index_db:
             return []
         
-        cursor = self.index_db.cursor()
         query = "SELECT * FROM hotels WHERE 1=1"
         params = []
         
@@ -90,10 +157,7 @@ class CSVQueryService:
         query += " ORDER BY price_per_night ASC LIMIT ?"
         params.append(limit)
         
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        
-        return [dict(row) for row in rows]
+        return self._execute_query(query, params)
     
     def search_flights(
         self,
@@ -119,7 +183,6 @@ class CSVQueryService:
         if not self.index_db:
             return []
         
-        cursor = self.index_db.cursor()
         query = "SELECT * FROM flights WHERE 1=1"
         params = []
         
@@ -206,10 +269,7 @@ class CSVQueryService:
         query += " ORDER BY price ASC LIMIT ?"
         params.append(limit)
         
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        
-        return [dict(row) for row in rows]
+        return self._execute_query(query, params)
     
     def get_airport_info(self, code: str) -> Optional[Dict[str, Any]]:
         """
@@ -224,14 +284,11 @@ class CSVQueryService:
         if not self.index_db:
             return None
         
-        cursor = self.index_db.cursor()
-        cursor.execute(
-            "SELECT * FROM airports WHERE code = ? OR iata = ? OR icao = ?",
-            (code.upper(), code.upper(), code.upper())
-        )
-        row = cursor.fetchone()
+        query = "SELECT * FROM airports WHERE code = ? OR iata = ? OR icao = ?"
+        params = [code.upper(), code.upper(), code.upper()]
+        rows = self._execute_query(query, params)
         
-        return dict(row) if row else None
+        return rows[0] if rows else None
     
     def get_route_info(self, origin: str, destination: str) -> List[Dict[str, Any]]:
         """
@@ -247,14 +304,9 @@ class CSVQueryService:
         if not self.index_db:
             return []
         
-        cursor = self.index_db.cursor()
-        cursor.execute(
-            "SELECT * FROM routes WHERE origin_airport = ? AND dest_airport = ?",
-            (origin.upper(), destination.upper())
-        )
-        rows = cursor.fetchall()
-        
-        return [dict(row) for row in rows]
+        query = "SELECT * FROM routes WHERE origin_airport = ? AND dest_airport = ?"
+        params = [origin.upper(), destination.upper()]
+        return self._execute_query(query, params)
     
     def get_flight_delays(
         self,
@@ -276,7 +328,6 @@ class CSVQueryService:
         if not self.index_db:
             return []
         
-        cursor = self.index_db.cursor()
         query = "SELECT * FROM flight_delays WHERE 1=1"
         params = []
         
@@ -294,10 +345,7 @@ class CSVQueryService:
         
         query += " LIMIT 100"
         
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        
-        return [dict(row) for row in rows]
+        return self._execute_query(query, params)
     
     def get_context_for_query(
         self,
@@ -449,5 +497,10 @@ class CSVQueryService:
     def close(self):
         """Close database connection"""
         if self.index_db:
-            self.index_db.close()
+            if self.use_mysql:
+                self.index_db.close()
+                if self.engine:
+                    self.engine.dispose()
+            else:
+                self.index_db.close()
 

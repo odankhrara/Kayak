@@ -345,13 +345,27 @@ async def chat_message(
                     bundle_flights = [f for f in bundle_flights if f]
                     bundle_hotels = [h for h in bundle_hotels if h]
                     
-                    # Skip explanation for faster response (can be enabled on-demand)
-                    # concierge = ConciergeAgent(session)
-                    # explanation = concierge.explain_tradeoffs(...)
-                    # response_message += f"\n\n**Why I recommend this bundle:**\n{explanation}"
+                    # Generate explanation with user context for adaptive reasoning
+                    concierge = ConciergeAgent(session)
+                    explanation = concierge.explain_tradeoffs(
+                        first_bundle, bundle_flights, bundle_hotels, bundle_list[:3],
+                        user_context=context
+                    )
+                    response_message += f"\n\n**Why I recommend this:**\n{explanation}"
                     
                     # Store bundle ID in context for policy questions
                     context_manager.get_context(session_id)['last_bundle_id'] = first_bundle.id
+                    
+                    # Update proactive concierge with user preferences for future recommendations
+                    try:
+                        from app.services.proactive_concierge import ProactiveConcierge
+                        from app.db.session import get_session
+                        proactive_session_gen = get_session()
+                        proactive_session = next(proactive_session_gen)
+                        proactive_concierge = ProactiveConcierge(proactive_session)
+                        proactive_concierge.update_user_preferences(user_id, context)
+                    except Exception as e:
+                        print(f"[Chat] Error updating proactive concierge: {e}")
                 
                 response_message += "\n\nWould you like to see more details, ask about policies (refunds, pets, breakfast, etc.), or set up a price watch?"
             else:
@@ -576,15 +590,41 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
                             "tags": bundle.tags.split(",") if bundle.tags else []
                         })
                     
-                    # Generate response message
+                    # Generate response message with explanations
                     if bundles:
                         response_message = f"I found {len(bundles)} great deals for you! "
                         response_message += f"Here are bundles starting at ${min(b['total_price'] for b in bundles):.2f}. "
-                        response_message += "\n\nWould you like to see more details, ask about policies (refunds, pets, breakfast, etc.), or set up a price watch?"
                         
-                        # Store bundle ID in context for policy questions
+                        # Add explanation for first bundle (adaptive reasoning)
                         if bundle_list:
-                            context_manager.get_context(session_id)['last_bundle_id'] = bundle_list[0].id
+                            first_bundle = bundle_list[0]
+                            flight_ids = [int(id) for id in first_bundle.flight_deal_ids.split(",") if id] if first_bundle.flight_deal_ids else []
+                            hotel_ids = [int(id) for id in first_bundle.hotel_deal_ids.split(",") if id] if first_bundle.hotel_deal_ids else []
+                            
+                            bundle_flights = [session.get(FlightDeal, fid) for fid in flight_ids if fid]
+                            bundle_hotels = [session.get(HotelDeal, hid) for hid in hotel_ids if hid]
+                            bundle_flights = [f for f in bundle_flights if f]
+                            bundle_hotels = [h for h in bundle_hotels if h]
+                            
+                            concierge = ConciergeAgent(session)
+                            explanation = concierge.explain_tradeoffs(
+                                first_bundle, bundle_flights, bundle_hotels, bundle_list[:3],
+                                user_context=context
+                            )
+                            response_message += f"\n\n**Why I recommend this:**\n{explanation}"
+                            
+                            # Store bundle ID in context for policy questions
+                            context_manager.get_context(session_id)['last_bundle_id'] = first_bundle.id
+                            
+                            # Update proactive concierge with user preferences for future recommendations
+                            try:
+                                from app.services.proactive_concierge import ProactiveConcierge
+                                proactive_concierge = ProactiveConcierge(session)
+                                proactive_concierge.update_user_preferences(user_id, context)
+                            except Exception as e:
+                                print(f"[WebSocket] Error updating proactive concierge: {e}")
+                        
+                        response_message += "\n\nWould you like to see more details, ask about policies (refunds, pets, breakfast, etc.), or set up a price watch?"
                     else:
                         # No bundles found - provide helpful guidance
                         response_message = "I couldn't find any bundles matching your criteria right now. "
