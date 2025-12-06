@@ -61,19 +61,19 @@
 
 ### 4. **Environment Variables**
 
-#### `.env` files reference SQLite:
-- `DATABASE_URL=sqlite:///./ai_recommendations.db` (fallback)
-- `CSV_INDEX_DB=./csv_index.db` (CSV index path)
-- `USE_MYSQL=false` (to use SQLite instead of MySQL)
+#### `.env` files reference SQLite (fallback only):
+- `DATABASE_URL=sqlite:///./ai_recommendations.db` (only used if `USE_MYSQL=false`)
+- `CSV_INDEX_DB=./csv_index.db` (only used if `USE_MYSQL=false`)
+- `USE_MYSQL=false` (to use SQLite instead of MySQL - MySQL is default)
 
 ### 5. **Documentation References**
 
 SQLite is mentioned in:
-- `README.md` - SQLite as default database
-- `ai-recommendation/README.md` - SQLite configuration
-- `ai-recommendation/RUNNING_AI_AGENT.md` - SQLite setup instructions
+- `README.md` - MySQL is default database (SQLite fallback)
+- `ai-recommendation/README.md` - MySQL configuration (SQLite fallback)
+- `ai-recommendation/RUNNING_AI_AGENT.md` - MySQL setup instructions (SQLite fallback)
 - `ai-recommendation/CSV_INDEXER_MYSQL_UPDATE.md` - SQLite vs MySQL comparison
-- `docs/DATABASE_SCHEMA_DIAGRAM.md` - SQLite schema documentation
+- `docs/DATABASE_SCHEMA_DIAGRAM.md` - Database schema documentation (MySQL/SQLite)
 
 ## 🔄 Current Status
 
@@ -134,10 +134,10 @@ USE_MYSQL=false
 
 ## 🔍 Files That Import/Use SQLite
 
-1. `ai-recommendation/app/db/session.py` - Database session (SQLite fallback)
-2. `ai-recommendation/app/services/csv_data_indexer.py` - CSV indexer (SQLite default)
-3. `ai-recommendation/app/services/csv_query_service.py` - CSV queries (SQLite default)
-4. `scripts/check_data_import_status.py` - Status checker (reads SQLite files)
+1. `ai-recommendation/app/db/session.py` - Database session (MySQL default, SQLite fallback)
+2. `ai-recommendation/app/services/csv_data_indexer.py` - CSV indexer (MySQL default, SQLite fallback)
+3. `ai-recommendation/app/services/csv_query_service.py` - CSV queries (MySQL default, SQLite fallback)
+4. `scripts/check_data_import_status.py` - Status checker (reads SQLite files when fallback is used)
 
 ## 📝 Notes
 
