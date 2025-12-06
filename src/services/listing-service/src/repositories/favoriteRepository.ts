@@ -1,6 +1,6 @@
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { mysqlPool } from '../../../common/src/db/mysqlPool';
-import { v4 as uuidv4 } from 'uuid';
+import mysqlPool from '@kayak/common/src/db/mysqlPool';
+import { randomUUID } from 'crypto';
 
 export interface Favorite {
   favorite_id: number;
@@ -148,7 +148,7 @@ class FavoriteRepository {
     }
 
     // Generate a unique share token
-    const shareToken = uuidv4();
+    const shareToken = randomUUID();
     
     // Calculate expiration date if specified
     let expiresAt = null;

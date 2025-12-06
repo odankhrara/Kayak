@@ -6,6 +6,7 @@ import { Consumer } from 'kafkajs'
 /**
  * Kafka consumer for click events
  * Consumes click events and stores them in MongoDB logs collection
+ * Uses fail-fast approach - no aggressive retries to prevent CPU overload
  */
 export class ClickEventsConsumer {
   private consumer: Consumer | null = null
@@ -23,8 +24,10 @@ export class ClickEventsConsumer {
       console.log('Click events consumer started')
 
       await this.consume()
-    } catch (error) {
-      console.error('Error starting click events consumer:', error)
+    } catch (error: any) {
+      // Fail fast - don't retry aggressively to prevent CPU overload
+      console.error('Error starting click events consumer:', error.message)
+      console.warn('⚠️  Click tracking will be unavailable')
       throw error
     }
   }

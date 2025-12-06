@@ -1,6 +1,12 @@
 import api from './api';
 import { Car, CarSearchFilters } from '../types';
 
+export interface CarLocation {
+  location: string;
+  label: string;
+  carCount: number;
+}
+
 // Map backend response to frontend Car type
 const mapCarResponse = (backendCar: any): Car => ({
   carId: backendCar.carId,
@@ -17,6 +23,15 @@ const mapCarResponse = (backendCar: any): Car => ({
 });
 
 export const carService = {
+  // Get locations for autocomplete
+  async getLocations(searchTerm?: string): Promise<CarLocation[]> {
+    const params = searchTerm ? `?q=${encodeURIComponent(searchTerm)}` : '';
+    const response = await api.get<{ locations: CarLocation[]; count: number }>(
+      `/api/listings/cars/locations${params}`
+    );
+    return response.data.locations;
+  },
+
   // Search cars
   async search(filters: CarSearchFilters): Promise<Car[]> {
     const params = new URLSearchParams();

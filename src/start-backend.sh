@@ -41,8 +41,17 @@ start_service() {
         npm install --silent
     fi
     
-    # Start service in background with MySQL environment variables
-    env MYSQL_HOST=${MYSQL_HOST} MYSQL_PORT=${MYSQL_PORT} MYSQL_USER=${MYSQL_USER} MYSQL_PASSWORD=${MYSQL_PASSWORD} MYSQL_DATABASE=${MYSQL_DATABASE} npm run dev > "$BASE_DIR/logs/${service_name}.log" 2>&1 &
+    # Start service in background with all required environment variables
+    env MYSQL_HOST=${MYSQL_HOST} \
+        MYSQL_PORT=${MYSQL_PORT} \
+        MYSQL_USER=${MYSQL_USER} \
+        MYSQL_PASSWORD=${MYSQL_PASSWORD} \
+        MYSQL_DATABASE=${MYSQL_DATABASE} \
+        KAFKA_BROKERS=${KAFKA_BROKERS} \
+        JWT_SECRET=${JWT_SECRET} \
+        MONGODB_URI=${MONGODB_URI} \
+        REDIS_URL=${REDIS_URL} \
+        npm run dev > "$BASE_DIR/logs/${service_name}.log" 2>&1 &
     echo $! > "$BASE_DIR/logs/${service_name}.pid"
     sleep 2
     echo -e "${GREEN}✅ $service_name started (PID: $(cat "$BASE_DIR/logs/${service_name}.pid"))${NC}"
@@ -51,13 +60,40 @@ start_service() {
 # Create logs directory
 mkdir -p "$BASE_DIR/logs"
 
-# Set MySQL configuration for Docker MySQL on port 3307
-# (Docker MySQL is mapped to 3307 because system MySQL uses 3306)
-export MYSQL_HOST=localhost
-export MYSQL_PORT=3307
-export MYSQL_USER=root
-export MYSQL_PASSWORD=password
-export MYSQL_DATABASE=kayak
+# ============================================
+# CONFIGURATION (Use existing env vars or defaults)
+# ============================================
+# These values can be overridden by setting them before running this script
+# or by creating a .env file in the project root
+
+# Set MySQL configuration for Docker MySQL
+# (Docker MySQL is mapped to 3307 to avoid conflict with local MySQL on 3306)
+export MYSQL_HOST=${MYSQL_HOST:-localhost}
+export MYSQL_PORT=${MYSQL_PORT:-3307}
+export MYSQL_USER=${MYSQL_USER:-root}
+export MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
+export MYSQL_DATABASE=${MYSQL_DATABASE:-kayak}
+
+# Set Kafka broker for services running outside Docker
+# Docker internal: kafka:9092, External: localhost:29092
+export KAFKA_BROKERS=${KAFKA_BROKERS:-localhost:29092}
+
+# Set JWT secret (must match across all services)
+# IMPORTANT: Override this in production!
+export JWT_SECRET=${JWT_SECRET:-your-secret-key}
+
+# Set MongoDB URI
+export MONGODB_URI=${MONGODB_URI:-mongodb://localhost:27017/kayak}
+
+# Set Redis URL
+export REDIS_URL=${REDIS_URL:-redis://localhost:6379}
+
+echo "📋 Configuration:"
+echo "   MySQL:    ${MYSQL_HOST}:${MYSQL_PORT} (db: ${MYSQL_DATABASE})"
+echo "   MongoDB:  ${MONGODB_URI}"
+echo "   Kafka:    ${KAFKA_BROKERS}"
+echo "   Redis:    ${REDIS_URL}"
+echo ""
 
 # Check Docker
 if ! docker ps >/dev/null 2>&1; then

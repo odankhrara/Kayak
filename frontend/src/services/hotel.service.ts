@@ -1,7 +1,23 @@
 import api from './api';
 import { Hotel, HotelSearchFilters } from '../types';
 
+export interface HotelLocation {
+  city: string;
+  state: string;
+  label: string;
+  hotelCount: number;
+}
+
 export const hotelService = {
+  // Get locations for autocomplete
+  async getLocations(searchTerm?: string): Promise<HotelLocation[]> {
+    const params = searchTerm ? `?q=${encodeURIComponent(searchTerm)}` : '';
+    const response = await api.get<{ locations: HotelLocation[]; count: number }>(
+      `/api/listings/hotels/locations${params}`
+    );
+    return response.data.locations;
+  },
+
   // Search hotels
   async search(filters: HotelSearchFilters): Promise<Hotel[]> {
     const params = new URLSearchParams();

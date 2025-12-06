@@ -6,6 +6,31 @@ const router = Router()
 const carService = new CarService()
 
 /**
+ * @route   GET /api/cars/locations
+ * @desc    Get all unique locations for autocomplete
+ * @access  Public
+ * @query   q (search term)
+ */
+router.get('/locations', async (req: Request, res: Response) => {
+  try {
+    const searchTerm = req.query.q as string
+    const locations = await carService.getLocations(searchTerm)
+    
+    res.json({
+      count: locations.length,
+      locations: locations.map(loc => ({
+        location: loc.location,
+        label: loc.location,
+        carCount: loc.carCount
+      }))
+    })
+  } catch (error: any) {
+    console.error('Get locations error:', error.message)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+/**
  * @route   GET /api/cars/search
  * @desc    Search cars with filters
  * @access  Public

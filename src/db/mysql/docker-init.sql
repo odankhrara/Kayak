@@ -8,6 +8,7 @@ USE kayak;
 -- Drop tables if they exist (for clean initialization)
 DROP TABLE IF EXISTS shared_trips;
 DROP TABLE IF EXISTS favorites;
+DROP TABLE IF EXISTS booking_rooms;
 DROP TABLE IF EXISTS flight_booking_details;
 DROP TABLE IF EXISTS hotel_amenities;
 DROP TABLE IF EXISTS hotel_rooms;
@@ -227,6 +228,24 @@ CREATE TABLE flight_booking_details (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
+-- 9b. BOOKING ROOMS TABLE (for multi-room hotel bookings)
+-- ============================================
+CREATE TABLE booking_rooms (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    booking_id VARCHAR(20) NOT NULL,
+    hotel_id VARCHAR(50) NOT NULL,
+    room_type VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    price_per_night DECIMAL(10,2) NOT NULL,
+    max_guests INT NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL COMMENT 'quantity * price_per_night * nights',
+    
+    FOREIGN KEY (booking_id) REFERENCES bookings(booking_id) ON DELETE CASCADE,
+    INDEX idx_booking_id (booking_id),
+    INDEX idx_hotel_room (hotel_id, room_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
 -- 10. BILLING TABLE
 -- ============================================
 CREATE TABLE billing (
@@ -379,7 +398,71 @@ VALUES
 -- ('CAR010', 'luxury', 'Hertz', 'Mercedes E-Class', 2024, 'automatic', 5, 150.99, 'New York, NY', 4.9, 12, TRUE);
 
 -- ============================================
--- 11. FAVORITES TABLE
+-- 11. REVIEWS TABLE
+-- ============================================
+CREATE TABLE reviews (
+    review_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(11) NOT NULL,
+    item_type ENUM('flight', 'hotel', 'car') NOT NULL,
+    item_id VARCHAR(50) NOT NULL COMMENT 'flight_id, hotel_id, or car_id',
+    booking_id INT NULL COMMENT 'Optional link to booking',
+    rating TINYINT NOT NULL,
+    title VARCHAR(200),
+    comment TEXT,
+    helpful_count INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved',
+    
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_item (item_type, item_id),
+    INDEX idx_user_reviews (user_id),
+    INDEX idx_rating (rating),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 12. BIDS TABLE (Name Your Own Price)
+-- ============================================
+CREATE TABLE bids (
+    bid_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(11) NOT NULL,
+    item_type ENUM('flight', 'hotel', 'car') NOT NULL,
+    item_id VARCHAR(50) NOT NULL,
+    original_price DECIMAL(10,2) NOT NULL,
+    bid_amount DECIMAL(10,2) NOT NULL,
+    status ENUM('pending', 'accepted', 'rejected', 'expired', 'completed') DEFAULT 'pending',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    responded_at TIMESTAMP NULL,
+    booking_id VARCHAR(20) NULL COMMENT 'Link to booking if bid accepted and completed',
+    
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_user_bids (user_id),
+    INDEX idx_item (item_type, item_id),
+    INDEX idx_status (status),
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 12b. BID ROOMS TABLE (for multi-room hotel bids)
+-- ============================================
+CREATE TABLE bid_rooms (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    bid_id INT NOT NULL,
+    room_type VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    price_per_night DECIMAL(10,2) NOT NULL,
+    max_guests INT NOT NULL,
+    nights INT NOT NULL DEFAULT 1,
+    
+    FOREIGN KEY (bid_id) REFERENCES bids(bid_id) ON DELETE CASCADE,
+    INDEX idx_bid_id (bid_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 13. FAVORITES TABLE
 -- ============================================
 CREATE TABLE favorites (
     favorite_id INT PRIMARY KEY AUTO_INCREMENT,

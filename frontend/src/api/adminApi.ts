@@ -1,8 +1,13 @@
 import axios from 'axios'
 import api from '../services/api'
 
-const API_BASE_URL = 'http://localhost:8006/api/admin'
-const HOST_ANALYSIS_API_BASE_URL = 'http://localhost:8004/api/admin'
+// Use environment variables for portability across different systems
+// Default to localhost for local development
+const ADMIN_SERVICE_URL = import.meta.env.VITE_ADMIN_SERVICE_URL || 'http://localhost:8006'
+const ANALYTICS_SERVICE_URL = import.meta.env.VITE_ANALYTICS_SERVICE_URL || 'http://localhost:8004'
+
+const API_BASE_URL = `${ADMIN_SERVICE_URL}/api/admin`
+const HOST_ANALYSIS_API_BASE_URL = `${ANALYTICS_SERVICE_URL}/api/admin`
 
 export interface RevenueStats {
   totalRevenue: number
@@ -42,10 +47,11 @@ export const adminApi = {
   ///////////////////////////////////////////////////////////////
 
   // Host/Provider Analysis APIs
-  getClicksPerPage: async (startDate?: string, endDate?: string): Promise<any[]> => {
+  getClicksPerPage: async (startDate?: string, endDate?: string, propertyType?: 'hotel' | 'flight' | 'car'): Promise<any[]> => {
     const params = new URLSearchParams()
     if (startDate) params.append('startDate', startDate)
     if (endDate) params.append('endDate', endDate)
+    if (propertyType) params.append('propertyType', propertyType)
     const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/host/clicks-per-page?${params}`)
     return response.data
   },
@@ -86,6 +92,65 @@ export const adminApi = {
     const params = new URLSearchParams()
     if (propertyId) params.append('propertyId', propertyId)
     const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/host/bidding-trace?${params}`)
+    return response.data
+  },
+
+  // ============================================
+  // PROVIDER ANALYTICS APIs (Phase 1)
+  // ============================================
+
+  // Get all providers summary
+  getProvidersSummary: async (year?: number): Promise<any> => {
+    const params = new URLSearchParams()
+    if (year) params.append('year', year.toString())
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/providers/summary?${params}`)
+    return response.data
+  },
+
+  // Get top airlines by revenue
+  getTopAirlines: async (year?: number, limit?: number): Promise<any[]> => {
+    const params = new URLSearchParams()
+    if (year) params.append('year', year.toString())
+    if (limit) params.append('limit', limit.toString())
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/providers/airlines?${params}`)
+    return response.data
+  },
+
+  // Get top hotels by bookings
+  getTopHotels: async (year?: number, limit?: number): Promise<any[]> => {
+    const params = new URLSearchParams()
+    if (year) params.append('year', year.toString())
+    if (limit) params.append('limit', limit.toString())
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/providers/hotels?${params}`)
+    return response.data
+  },
+
+  // Get top car companies by rentals
+  getTopCarCompanies: async (year?: number, limit?: number): Promise<any[]> => {
+    const params = new URLSearchParams()
+    if (year) params.append('year', year.toString())
+    if (limit) params.append('limit', limit.toString())
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/providers/cars?${params}`)
+    return response.data
+  },
+
+  // Get provider revenue over time
+  getProviderRevenueTimeline: async (
+    type: 'airline' | 'hotel' | 'car',
+    provider?: string,
+    year?: number
+  ): Promise<any[]> => {
+    const params = new URLSearchParams()
+    params.append('type', type)
+    if (provider) params.append('provider', provider)
+    if (year) params.append('year', year.toString())
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/providers/revenue-timeline?${params}`)
+    return response.data
+  },
+
+  // Get list of all providers
+  getProvidersList: async (): Promise<any> => {
+    const response = await api.get(`${HOST_ANALYSIS_API_BASE_URL}/providers/list`)
     return response.data
   },
 }

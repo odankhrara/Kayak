@@ -6,6 +6,7 @@ import { Consumer } from 'kafkajs'
 /**
  * Kafka consumer for user tracking events
  * Consumes page views, searches, booking attempts and stores them in MongoDB logs collection
+ * Uses fail-fast approach - no aggressive retries to prevent CPU overload
  */
 export class UserTrackingConsumer {
   private consumer: Consumer | null = null
@@ -23,8 +24,10 @@ export class UserTrackingConsumer {
       console.log('User tracking consumer started')
 
       await this.consume()
-    } catch (error) {
-      console.error('Error starting user tracking consumer:', error)
+    } catch (error: any) {
+      // Fail fast - don't retry aggressively to prevent CPU overload
+      console.error('Error starting user tracking consumer:', error.message)
+      console.warn('⚠️  User tracking will be unavailable')
       throw error
     }
   }

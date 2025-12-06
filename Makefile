@@ -122,24 +122,28 @@ stop: stop-frontend stop-backend db-stop
 
 stop-backend:
 	@echo "🛑 Stopping backend services..."
-	@-pkill -f "node.*api-gateway" || true
-	@-pkill -f "node.*user-service" || true
-	@-pkill -f "node.*listing-service" || true
-	@-pkill -f "node.*booking-billing-service" || true
-	@-pkill -f "node.*analytics-service" || true
-	@-pkill -f "node.*admin-service" || true
-	@-if [ -f src/logs/api-gateway.pid ]; then kill $$(cat src/logs/api-gateway.pid) 2>/dev/null || true; fi
-	@-if [ -f src/logs/user-service.pid ]; then kill $$(cat src/logs/user-service.pid) 2>/dev/null || true; fi
-	@-if [ -f src/logs/listing-service.pid ]; then kill $$(cat src/logs/listing-service.pid) 2>/dev/null || true; fi
-	@-if [ -f src/logs/booking-billing-service.pid ]; then kill $$(cat src/logs/booking-billing-service.pid) 2>/dev/null || true; fi
-	@-if [ -f src/logs/analytics-service.pid ]; then kill $$(cat src/logs/analytics-service.pid) 2>/dev/null || true; fi
-	@-if [ -f src/logs/admin-service.pid ]; then kill $$(cat src/logs/admin-service.pid) 2>/dev/null || true; fi
+	@# Kill using SIGKILL (-9) to ensure ts-node-dev --respawn doesn't restart
+	@-pkill -9 -f "api-gateway" 2>/dev/null || true
+	@-pkill -9 -f "user-service" 2>/dev/null || true
+	@-pkill -9 -f "listing-service" 2>/dev/null || true
+	@-pkill -9 -f "booking-billing-service" 2>/dev/null || true
+	@-pkill -9 -f "analytics-service" 2>/dev/null || true
+	@-pkill -9 -f "admin-service" 2>/dev/null || true
+	@# Also kill any ts-node-dev processes that might be orphaned
+	@-pkill -9 -f "ts-node-dev.*services" 2>/dev/null || true
+	@-if [ -f src/logs/api-gateway.pid ]; then kill -9 $$(cat src/logs/api-gateway.pid) 2>/dev/null || true; fi
+	@-if [ -f src/logs/user-service.pid ]; then kill -9 $$(cat src/logs/user-service.pid) 2>/dev/null || true; fi
+	@-if [ -f src/logs/listing-service.pid ]; then kill -9 $$(cat src/logs/listing-service.pid) 2>/dev/null || true; fi
+	@-if [ -f src/logs/booking-billing-service.pid ]; then kill -9 $$(cat src/logs/booking-billing-service.pid) 2>/dev/null || true; fi
+	@-if [ -f src/logs/analytics-service.pid ]; then kill -9 $$(cat src/logs/analytics-service.pid) 2>/dev/null || true; fi
+	@-if [ -f src/logs/admin-service.pid ]; then kill -9 $$(cat src/logs/admin-service.pid) 2>/dev/null || true; fi
 	@rm -f src/logs/api-gateway.pid
 	@rm -f src/logs/user-service.pid
 	@rm -f src/logs/listing-service.pid
 	@rm -f src/logs/booking-billing-service.pid
 	@rm -f src/logs/analytics-service.pid
 	@rm -f src/logs/admin-service.pid
+	@sleep 1
 	@echo "✅ Backend services stopped"
 
 stop-frontend:
@@ -349,9 +353,10 @@ clean-all: clean
 	fi
 
 clean-docker:
-	@echo "🧹 Removing Docker containers and volumes..."
-	@cd src/infra && docker-compose down -v
-	@echo "✅ Docker cleaned"
+	@echo "🧹 Removing Docker containers, volumes, and images..."
+	@cd src/infra && docker-compose down -v --rmi all --remove-orphans
+	@-docker volume prune -f 2>/dev/null || true
+	@echo "✅ Docker cleaned (containers, volumes, and images removed)"
 
 # ============================================================================
 # PRODUCTION
@@ -379,6 +384,9 @@ kill-ports:
 	@-lsof -ti:8003 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:8004 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:8006 | xargs kill -9 2>/dev/null || true
+	@# Also kill any service-related child processes
+	@-pkill -9 -f "analytics-service" 2>/dev/null || true
+	@-pkill -9 -f "ts-node-dev.*services" 2>/dev/null || true
 	@echo "✅ Ports cleared"
 
 version:
@@ -402,7 +410,7 @@ full-reset:
 	@echo "This will:"
 	@echo "  1. Stop all services"
 	@echo "  2. Kill all ports"
-	@echo "  3. Remove all Docker containers and volumes"
+	@echo "  3. Remove all Docker containers, volumes, AND images"
 	@echo "  4. Clean logs"
 	@echo "  5. Rebuild common module"
 	@echo "  6. Run full setup (DB + seed)"
@@ -414,8 +422,8 @@ full-reset:
 	@echo "⚠️  Killing all port processes..."
 	@make kill-ports
 	@echo ""
-	@echo "🗑️  Removing Docker containers and volumes..."
-	@-cd src/infra && docker-compose down -v --remove-orphans 2>/dev/null || true
+	@echo "🗑️  Removing Docker containers, volumes, and images..."
+	@-cd src/infra && docker-compose down -v --rmi all --remove-orphans 2>/dev/null || true
 	@-docker volume prune -f 2>/dev/null || true
 	@echo ""
 	@echo "🧹 Cleaning logs..."

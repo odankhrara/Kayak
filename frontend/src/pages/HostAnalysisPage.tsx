@@ -9,15 +9,40 @@ import { UserTraceDiagram } from '../components/trace/UserTraceDiagram'
 import { BiddingTraceDiagram } from '../components/trace/BiddingTraceDiagram'
 import './HostAnalysisPage.css'
 
+// Provider Analytics Types
+interface ProviderData {
+  provider: string
+  totalBookings?: number
+  totalRentals?: number
+  totalRevenue: number
+  avgRating: number
+  totalFlights?: number
+  totalProperties?: number
+  totalVehicles?: number
+  avgStars?: number
+}
+
+interface ProvidersSummary {
+  airlines: { providers: ProviderData[]; totalRevenue: number; totalProviders: number }
+  hotels: { providers: ProviderData[]; totalRevenue: number; totalProviders: number }
+  carCompanies: { providers: ProviderData[]; totalRevenue: number; totalProviders: number }
+  grandTotal: number
+}
+
 export default function HostAnalysisPage() {
   const { setLoading, setError } = useStore()
   const { user } = useAuthStore()
   const [clicksPerPage, setClicksPerPage] = useState<any[]>([])
   const [propertyClicks, setPropertyClicks] = useState<any[]>([])
   const [leastSeenAreas, setLeastSeenAreas] = useState<any[]>([])
-  //const [propertyReviews, setPropertyReviews] = useState<any[]>([])
+  const [propertyReviews, setPropertyReviews] = useState<any[]>([])
   const [userTraces, setUserTraces] = useState<any[]>([])
   const [biddingTraces, setBiddingTraces] = useState<any[]>([])
+
+  // Provider Analytics State
+  const [providersSummary, setProvidersSummary] = useState<ProvidersSummary | null>(null)
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [activeProviderTab, setActiveProviderTab] = useState<'airlines' | 'hotels' | 'cars'>('airlines')
 
   // Filters
   const [startDate, setStartDate] = useState<string>('')
@@ -34,14 +59,21 @@ export default function HostAnalysisPage() {
     }
   }, [user])
 
+  useEffect(() => {
+    if (user && user.isAdmin) {
+      loadProvidersSummary()
+    }
+  }, [selectedYear, user])
+
   const loadAllData = async () => {
     setLoading(true)
     try {
       await Promise.all([
+        loadProvidersSummary(),
         loadClicksPerPage(),
         loadPropertyClicks(),
         loadLeastSeenAreas(),
-        //loadPropertyReviews(),
+        loadPropertyReviews(),
         loadUserTraces(),
         loadBiddingTraces()
       ])
@@ -52,9 +84,23 @@ export default function HostAnalysisPage() {
     }
   }
 
+  const loadProvidersSummary = async () => {
+    try {
+      const data = await adminApi.getProvidersSummary(selectedYear)
+      setProvidersSummary(data)
+      console.log('providersSummary', data)
+    } catch (error) {
+      console.error('Failed to load providers summary:', error)
+    }
+  }
+
   const loadClicksPerPage = async () => {
     try {
-      const data = await adminApi.getClicksPerPage(startDate || undefined, endDate || undefined)
+      const data = await adminApi.getClicksPerPage(
+        startDate || undefined, 
+        endDate || undefined,
+        propertyType ? (propertyType as 'hotel' | 'flight' | 'car') : undefined
+      )
       setClicksPerPage(data)
       console.log('clicksPerPage', clicksPerPage)
     } catch (error) {
@@ -87,9 +133,10 @@ export default function HostAnalysisPage() {
       const data = await adminApi.getPropertyReviews(
         propertyType ? (propertyType as 'hotel' | 'flight' | 'car') : undefined
       )
-      //setPropertyReviews(data)
+      setPropertyReviews(data || [])
     } catch (error) {
       console.error('Failed to load property reviews:', error)
+      setPropertyReviews([])
     }
   }
 
@@ -121,49 +168,262 @@ export default function HostAnalysisPage() {
     loadAllData()
   }
 
-  if (user && !user.isAdmin)  {
+  // Show access denied for non-admin users
+  if (user && !user.isAdmin) {
     return <div className="loading">Access denied. Admin access required.</div>
-  } else {
+  }
+
+  // Show loading while user is being loaded or data is loading
+  if (!user) {
     return <div className="loading">Loading...</div>
+  }
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)
+  }
+
+  // Get color for provider bar
+  const getProviderColor = (index: number) => {
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1']
+    return colors[index % colors.length]
   }
 
   return (
     <div className="host-analysis-page">
       <h2>Host/Provider Analysis Reports</h2>
 
+      {/* ============================================ */}
+      {/* PROVIDER ANALYTICS SECTION (Phase 1) */}
+      {/* ============================================ */}
+      <div className="provider-analytics-section">
+        <div className="section-header">
+          <h3>📊 Provider Analytics</h3>
+          <div className="year-selector">
+            <label>Year:</label>
+            <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))}>
+              {[2023, 2024, 2025, 2026].map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        {providersSummary && (
+          <div className="provider-summary-cards">
+            <div className="summary-card airlines-card">
+              <div className="card-icon">✈️</div>
+              <div className="card-content">
+                <h4>Airlines</h4>
+                <p className="card-value">{formatCurrency(providersSummary.airlines.totalRevenue)}</p>
+                <p className="card-label">{providersSummary.airlines.totalProviders} providers</p>
+              </div>
+            </div>
+            <div className="summary-card hotels-card">
+              <div className="card-icon">🏨</div>
+              <div className="card-content">
+                <h4>Hotels</h4>
+                <p className="card-value">{formatCurrency(providersSummary.hotels.totalRevenue)}</p>
+                <p className="card-label">{providersSummary.hotels.totalProviders} providers</p>
+              </div>
+            </div>
+            <div className="summary-card cars-card">
+              <div className="card-icon">🚗</div>
+              <div className="card-content">
+                <h4>Car Rentals</h4>
+                <p className="card-value">{formatCurrency(providersSummary.carCompanies.totalRevenue)}</p>
+                <p className="card-label">{providersSummary.carCompanies.totalProviders} providers</p>
+              </div>
+            </div>
+            <div className="summary-card total-card">
+              <div className="card-icon">💰</div>
+              <div className="card-content">
+                <h4>Grand Total</h4>
+                <p className="card-value">{formatCurrency(providersSummary.grandTotal)}</p>
+                <p className="card-label">All providers combined</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Provider Tabs */}
+        <div className="provider-tabs">
+          <button 
+            className={`tab-btn ${activeProviderTab === 'airlines' ? 'active' : ''}`}
+            onClick={() => setActiveProviderTab('airlines')}
+          >
+            ✈️ Top Airlines
+          </button>
+          <button 
+            className={`tab-btn ${activeProviderTab === 'hotels' ? 'active' : ''}`}
+            onClick={() => setActiveProviderTab('hotels')}
+          >
+            🏨 Top Hotels
+          </button>
+          <button 
+            className={`tab-btn ${activeProviderTab === 'cars' ? 'active' : ''}`}
+            onClick={() => setActiveProviderTab('cars')}
+          >
+            🚗 Top Car Companies
+          </button>
+        </div>
+
+        {/* Provider Charts */}
+        <div className="provider-chart-container">
+          {providersSummary && activeProviderTab === 'airlines' && (
+            <div className="provider-chart">
+              <h4>Top 10 Airlines by Revenue ({selectedYear})</h4>
+              <div className="horizontal-bar-chart">
+                {providersSummary.airlines.providers.map((airline, index) => {
+                  const maxRevenue = Math.max(...providersSummary.airlines.providers.map(a => a.totalRevenue)) || 1
+                  const widthPercent = (airline.totalRevenue / maxRevenue) * 100
+                  return (
+                    <div key={airline.provider} className="bar-row">
+                      <div className="bar-label">{airline.provider}</div>
+                      <div className="bar-container">
+                        <div 
+                          className="bar-fill" 
+                          style={{ 
+                            width: `${widthPercent}%`,
+                            backgroundColor: getProviderColor(index)
+                          }}
+                        />
+                        <span className="bar-value">{formatCurrency(airline.totalRevenue)}</span>
+                      </div>
+                      <div className="bar-stats">
+                        <span>📈 {airline.totalBookings || 0} bookings</span>
+                        <span>⭐ {airline.avgRating?.toFixed(1) || 'N/A'}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {providersSummary.airlines.providers.length === 0 && (
+                  <p className="no-data">No airline booking data for {selectedYear}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {providersSummary && activeProviderTab === 'hotels' && (
+            <div className="provider-chart">
+              <h4>Top 10 Hotel Chains by Bookings ({selectedYear})</h4>
+              <div className="horizontal-bar-chart">
+                {providersSummary.hotels.providers.map((hotel, index) => {
+                  const maxBookings = Math.max(...providersSummary.hotels.providers.map(h => h.totalBookings || 0)) || 1
+                  const widthPercent = ((hotel.totalBookings || 0) / maxBookings) * 100
+                  return (
+                    <div key={hotel.provider} className="bar-row">
+                      <div className="bar-label">{hotel.provider}</div>
+                      <div className="bar-container">
+                        <div 
+                          className="bar-fill" 
+                          style={{ 
+                            width: `${widthPercent}%`,
+                            backgroundColor: getProviderColor(index)
+                          }}
+                        />
+                        <span className="bar-value">{hotel.totalBookings || 0} bookings</span>
+                      </div>
+                      <div className="bar-stats">
+                        <span>💵 {formatCurrency(hotel.totalRevenue)}</span>
+                        <span>⭐ {hotel.avgRating?.toFixed(1) || 'N/A'}</span>
+                        <span>🏠 {hotel.totalProperties || 0} properties</span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {providersSummary.hotels.providers.length === 0 && (
+                  <p className="no-data">No hotel booking data for {selectedYear}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {providersSummary && activeProviderTab === 'cars' && (
+            <div className="provider-chart">
+              <h4>Top 10 Car Rental Companies by Rentals ({selectedYear})</h4>
+              <div className="horizontal-bar-chart">
+                {providersSummary.carCompanies.providers.map((company, index) => {
+                  const maxRentals = Math.max(...providersSummary.carCompanies.providers.map(c => c.totalRentals || 0)) || 1
+                  const widthPercent = ((company.totalRentals || 0) / maxRentals) * 100
+                  return (
+                    <div key={company.provider} className="bar-row">
+                      <div className="bar-label">{company.provider}</div>
+                      <div className="bar-container">
+                        <div 
+                          className="bar-fill" 
+                          style={{ 
+                            width: `${widthPercent}%`,
+                            backgroundColor: getProviderColor(index)
+                          }}
+                        />
+                        <span className="bar-value">{company.totalRentals || 0} rentals</span>
+                      </div>
+                      <div className="bar-stats">
+                        <span>💵 {formatCurrency(company.totalRevenue)}</span>
+                        <span>⭐ {company.avgRating?.toFixed(1) || 'N/A'}</span>
+                        <span>🚙 {company.totalVehicles || 0} vehicles</span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {providersSummary.carCompanies.providers.length === 0 && (
+                  <p className="no-data">No car rental data for {selectedYear}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <hr className="section-divider" />
+
+      {/* ============================================ */}
+      {/* EXISTING HOST ANALYSIS SECTIONS */}
+      {/* ============================================ */}
+
       {/* Filters */}
       <div className="analysis-filters">
-        <div className="filter-group">
-          <label>Start Date:</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
+        <h3>📈 Click & User Analytics</h3>
+        <div className="filter-row">
+          <div className="filter-group">
+            <label>Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="filter-group">
+            <label>End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+          <div className="filter-group">
+            <label>Property Type:</label>
+            <select
+              value={propertyType}
+              onChange={(e) => setPropertyType(e.target.value as any)}
+            >
+              <option value="">All</option>
+              <option value="hotel">Hotel</option>
+              <option value="flight">Flight</option>
+              <option value="car">Car</option>
+            </select>
+          </div>
+          <button onClick={handleFilterChange} className="apply-filters-btn">
+            Apply Filters
+          </button>
         </div>
-        <div className="filter-group">
-          <label>End Date:</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
-        </div>
-        <div className="filter-group">
-          <label>Property Type:</label>
-          <select
-            value={propertyType}
-            onChange={(e) => setPropertyType(e.target.value as any)}
-          >
-            <option value="">All</option>
-            <option value="hotel">Hotel</option>
-            <option value="flight">Flight</option>
-            <option value="car">Car</option>
-          </select>
-        </div>
-        <button onClick={handleFilterChange} className="apply-filters-btn">
-          Apply Filters
-        </button>
       </div>
 
       {/* Clicks per Page Chart */}

@@ -282,18 +282,15 @@ Kayak/
 
 **Recent Improvements (December 2024):**
 - ✅ **Fixed NLU Parser**: Now correctly extracts airport codes (e.g., "DEL" from "BOM to DEL flights")
-- ✅ **Improved Data Import**: Removed duplicate checks, now imports 1,504+ flight deals and 1,587+ hotel deals (was 4 flights)
+- ✅ **Improved Data Import**: Removed duplicate checks, now imports 1,000+ flight deals (was 4)
 - ✅ **Enhanced Airport Support**: Added more Indian airports (BLR, MAA, HYD, CCU)
-- ✅ **WebSocket Connection**: Fixed connection stability with automatic reconnection and better error handling
-- ✅ **Bundle Booking Flow**: Fixed field mapping so clicking bundles shows complete booking information
-- ✅ **Context-Aware Parsing**: Improved NLU parser to correctly handle follow-up messages in conversation
-- ✅ **Better Error Handling**: Improved validation and user feedback throughout the application
+- ✅ **Better Error Handling**: Improved validation and user feedback
 
 #### 3. **Data Import & Management** ✅
 - **CSV Indexing**: 24,563 flights and 13,726 hotels indexed from Kaggle datasets
 - **Database Population**: 
   - MySQL: 10,015 flights, 632 hotels, 18,497 cars
-  - AI Database: 1,504+ flight deals, 1,587+ hotel deals
+  - AI Database: 1,004+ flight deals, 581+ hotel deals
 - **Data Import Scripts**: Automated scripts to populate from CSV files
 - **Status Checking**: Script to verify data import completeness
 
@@ -344,6 +341,28 @@ Kayak/
 - **Node.js 18+** (for backend/frontend services)
 - **Python 3.11+** (for AI service)
 - **Git** (for cloning repository)
+
+### Environment Configuration (Important for New Developers!)
+
+Before starting, configure your environment:
+
+```bash
+# Copy the environment template
+cp env.example .env
+
+# For frontend (optional, defaults work for local development)
+cp frontend/env.example frontend/.env.local
+```
+
+**Key Environment Variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MYSQL_PORT` | `3307` | Docker MySQL port (3307 avoids conflict with local MySQL) |
+| `KAFKA_BROKERS` | `localhost:29092` | Kafka external port for local development |
+| `JWT_SECRET` | `your-secret-key` | **Change this in production!** |
+| `MONGODB_URI` | `mongodb://localhost:27017/kayak` | MongoDB connection string |
+
+See `env.example` for full configuration options.
 
 ### Option 1: Using Makefile (Recommended)
 
@@ -484,8 +503,8 @@ npm run dev
 - File-based, easy to backup
 
 **Tables:**
-- `flight_deals` - AI-processed flight deals (1,504+ records)
-- `hotel_deals` - AI-processed hotel deals (1,587+ records)
+- `flight_deals` - AI-processed flight deals (1,004+ records)
+- `hotel_deals` - AI-processed hotel deals (581+ records)
 - `bundles` - Travel bundles (flight + hotel combinations)
 - `watches` - Price/inventory watches
 
@@ -799,44 +818,12 @@ make stop
 **Solution**:
 - Removed duplicate checks in `populate_all_datasets.py`
 - Increased import limits (500 flights/hotels from CSV index, 2000 rows from raw CSV)
-- Result: **1,504+ flight deals** (was 4), **1,587+ hotel deals** (was 581)
+- Result: **1,004+ flight deals** (was 4), **581+ hotel deals**
 
 ### 3. Enhanced Airport Support ✅
 - Added more Indian airport codes: BLR (Bangalore), MAA (Chennai), HYD (Hyderabad), CCU (Kolkata)
 
-### 4. WebSocket Connection & Chat Improvements ✅
-**Problem**: WebSocket connections were failing, AI assistant couldn't maintain real-time chat
-
-**Solution**:
-- Implemented automatic reconnection logic with exponential backoff in frontend
-- Enhanced WebSocket handler with better error handling and context-aware parsing
-- Improved conversation context management to preserve user information across messages
-- Fixed response message formatting to properly distinguish between "departing from" and "going to"
-- Result: **Stable WebSocket connections** with automatic reconnection on failures
-
-### 5. Bundle Booking Flow Fixes ✅
-**Problem**: Clicking on AI-recommended bundles showed empty booking details (no flight info, $0 prices)
-
-**Solution**:
-- Fixed field mapping between bundle API response and booking page expectations:
-  - `airline` → `airlineName`
-  - `origin` → `departureAirport`
-  - `destination` → `arrivalAirport`
-  - `discounted_price` → `pricePerTicket`
-- Added date extraction from flight `departure_time` and `arrival_time`
-- Fixed hotel booking entity structure with `rooms` array and proper date handling
-- Result: **Complete booking information** displayed correctly when clicking bundles
-
-### 6. Context-Aware NLU Parsing ✅
-**Problem**: Follow-up messages like "bombay" or "Delhi" were incorrectly parsed as destinations when user was asked for origin
-
-**Solution**:
-- Enhanced NLU parser to use conversation context when parsing follow-up messages
-- If asking for origin and user provides just a city, treat it as origin (not destination)
-- Priority-based field extraction based on missing fields in context
-- Result: **Accurate parsing** of follow-up messages in conversation flow
-
-### 7. Documentation Added ✅
+### 4. Documentation Added ✅
 - `AGENT_PROMPT_EXAMPLES.md`: 30+ example prompts for AI agent
 - `DATA_IMPORT_STATUS.md`: Complete data import status and verification
 - `AGENT_FIXES_APPLIED.md`: Documentation of fixes and improvements
@@ -896,10 +883,56 @@ make stop
 
 ## 🐛 Known Issues & Limitations
 
+- WebSocket reconnection logic needs improvement
 - Mobile UI needs more testing
 - AI deal detection rules are simplistic (MVP - can be enhanced with ML)
 - No real payment gateway integration (mock only - for educational purposes)
-- Some edge cases in NLU parsing for complex multi-city queries
+
+---
+
+## ⚠️ Developer Guidelines: ESM Package Compatibility
+
+> **CRITICAL**: This project uses **CommonJS modules**. Adding ESM-only packages will crash services!
+
+### Background
+In December 2024, we encountered a critical bug where the `listing-service` crashed in an infinite restart loop due to the `uuid` package v13 being ESM-only while our TypeScript compiles to CommonJS.
+
+### DO NOT Add These ESM-Only Packages:
+
+| Package | Issue | Alternative |
+|---------|-------|-------------|
+| `uuid` v9+ | ESM-only | Use `crypto.randomUUID()` (Node.js built-in) |
+| `chalk` v5+ | ESM-only | Use `chalk` v4.x |
+| `node-fetch` v3+ | ESM-only | Use v2.x or Node.js 18+ built-in `fetch` |
+| `got` v12+ | ESM-only | Use `got` v11.x |
+| `execa` v6+ | ESM-only | Use `execa` v5.x |
+| `ora` v6+ | ESM-only | Use `ora` v5.x |
+| `globby` v13+ | ESM-only | Use `globby` v11.x |
+| `p-limit` v4+ | ESM-only | Use `p-limit` v3.x |
+| `find-up` v6+ | ESM-only | Use `find-up` v5.x |
+
+### For UUID Generation, Use Node.js Built-in:
+
+```typescript
+// ✅ CORRECT - Use Node.js built-in (works with CommonJS)
+import { randomUUID } from 'crypto';
+const id = randomUUID();
+
+// ❌ WRONG - uuid v13+ is ESM-only (will crash)
+import { v4 as uuidv4 } from 'uuid';
+const id = uuidv4();
+```
+
+### Why This Matters:
+- All services use `"module": "commonjs"` in tsconfig.json
+- ESM-only packages throw `ERR_REQUIRE_ESM` at runtime
+- Service crashes → Docker restarts → crashes again → **infinite loop**
+- Results in intermittent "Error loading..." messages on frontend
+
+### Before Adding Any New Package:
+1. Check if it's ESM-only (look for `"type": "module"` in its package.json)
+2. If ESM-only, find a CommonJS-compatible alternative or older version
+3. Test in Docker container (not just local dev) before committing
 
 ---
 
@@ -973,14 +1006,17 @@ This project is for educational purposes only. Not licensed for commercial use.
 
 ## 📝 Changelog
 
+### December 6, 2024 - Critical Stability Fix
+- ✅ **ESM Compatibility Fix**: Fixed `listing-service` crash caused by ESM-only `uuid` v13 package
+- ✅ **Root Cause**: Replaced `uuid` with Node.js built-in `crypto.randomUUID()` 
+- ✅ **Developer Guidelines**: Added ESM package compatibility section to README
+- ✅ **Security Fix**: Patched `jws` vulnerability in `common` and `user-service` (npm audit fix)
+
 ### December 2024 - AI Agent & Data Import Improvements
 - ✅ **NLU Parser Fix**: Correctly extracts airport codes from natural language
-- ✅ **Data Import Enhancement**: Increased flight deals from 4 to 1,504+ and hotels to 1,587+
-- ✅ **WebSocket Connection**: Fixed connection stability with automatic reconnection
-- ✅ **Bundle Booking Flow**: Fixed field mapping for complete booking information display
-- ✅ **Context-Aware Parsing**: Improved conversation flow with context-aware NLU parsing
+- ✅ **Data Import Enhancement**: Increased flight deals from 4 to 1,004+
 - ✅ **Documentation**: Added comprehensive guides for agent usage and data import
-- ✅ **Airport Support**: Added more Indian airport codes (BLR, MAA, HYD, CCU)
+- ✅ **Airport Support**: Added more Indian airport codes
 
 ### November 2024 - Major Implementation Update
 - ✅ **Frontend**: Complete React implementation with 7 pages, 30+ components
@@ -990,4 +1026,4 @@ This project is for educational purposes only. Not licensed for commercial use.
 - ✅ **Tracking Service**: Event tracking system with Kafka integration
 - ✅ **Infrastructure**: Enhanced Docker setup with helper scripts
 
-**Last Updated**: December 5, 2024
+**Last Updated**: December 2, 2024

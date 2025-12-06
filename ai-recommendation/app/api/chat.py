@@ -428,20 +428,9 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
     - Send: {"message": "Weekend in Tokyo under $900..."}
     - Receive: ChatResponse JSON
     """
+    await websocket.accept()
+    
     try:
-        await websocket.accept()
-        print(f"[WebSocket] Connection accepted for user {user_id}")
-        
-        # Send welcome message to keep connection alive
-        try:
-            await websocket.send_json({
-                "message": "Connected! How can I help you plan your trip?",
-                "type": "connection"
-            })
-        except Exception as e:
-            print(f"[WebSocket] Error sending welcome message: {e}")
-            return
-        
         while True:
             # Receive message
             data = await websocket.receive_text()
@@ -461,152 +450,65 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
             try:
                 # Process message with timeout protection
                 print(f"[WebSocket] Received message: {chat_message.message[:50]}...")
-                
-                # Get context first to help with parsing
-                context = context_manager.get_context(session_id)
-                missing_fields = context_manager.get_missing_fields(session_id)
-                
-                # Add missing fields to context for parser
-                context['_missing_fields'] = missing_fields
-                
-                # Parse the natural language message with context (same as POST endpoint)
-                parsed = nlu_parser.parse(chat_message.message, context=context)
-                print(f"[WebSocket] Parsed request: origin={parsed.get('origin')}, destination={parsed.get('destination')}, city={parsed.get('city')}")
+                parsed = nlu_parser.parse(chat_message.message)
+                print(f"[WebSocket] Parsed request: origin={parsed.get('origin')}, destination={parsed.get('destination')}")
                 parsed_request = ParsedTripRequest(**parsed)
                 
                 # Merge with existing context
                 merged_request = context_manager.merge_with_context(session_id, parsed_request)
-                
-                # Re-check what we have and what's missing after merge
-                missing_fields = context_manager.get_missing_fields(session_id)
                 context = context_manager.get_context(session_id)
-                
-                # Mark if we're awaiting clarification
-                if missing_fields:
-                    context['awaiting_clarification'] = True
-                else:
-                    context.pop('awaiting_clarification', None)
-                
-                requires_clarification = len(missing_fields) > 0
-                clarification_questions = []
-                
-                # Only ask for missing information
-                if 'origin' in missing_fields:
-                    clarification_questions.append("Where are you departing from?")
-                if 'destination' in missing_fields:
-                    clarification_questions.append("Where would you like to go?")
-                if 'budget' in missing_fields:
-                    clarification_questions.append("What's your budget for this trip?")
+                missing_fields = context_manager.get_missing_fields(session_id)
                 
                 # Get recommendations if we have enough info
                 bundles = None
                 response_message = ""
                 
-                # Use merged request for search
-                search_request = merged_request
-                
-                if not requires_clarification:
-                    # Create concierge agent and get recommendations
+                if not missing_fields:
                     concierge = ConciergeAgent(session)
-                    
-                    # Clean up destination - remove "from" if accidentally captured
-                    destination = search_request.destination
-                    if destination and 'from' in destination.lower():
-                        destination = destination.lower().split('from')[0].strip().title()
-                    
-                    city = search_request.city
-                    if city and 'from' in city.lower():
-                        city = city.lower().split('from')[0].strip().title()
-                    
-                    # Validate origin and destination are different
-                    origin = search_request.origin
-                    if origin and destination:
-                        # Normalize to uppercase for comparison
-                        origin_upper = origin.upper().strip()
-                        dest_upper = destination.upper().strip()
-                        
-                        # Map city names to airport codes for comparison
-                        city_to_code = {
-                            'MUMBAI': 'BOM', 'BOMBAY': 'BOM',
-                            'DELHI': 'DEL', 'NEW DELHI': 'DEL',
-                            'TOKYO': 'NRT', 'NRT': 'NRT', 'HND': 'HND',
-                            'NEW YORK': 'JFK', 'NYC': 'JFK',
-                            'LOS ANGELES': 'LAX', 'LA': 'LAX',
-                            'MIAMI': 'MIA',
-                            'SAN FRANCISCO': 'SFO', 'SF': 'SFO',
-                            'CHICAGO': 'ORD',
-                        }
-                        
-                        origin_code = city_to_code.get(origin_upper, origin_upper)
-                        dest_code = city_to_code.get(dest_upper, dest_upper)
-                        
-                        if origin_code == dest_code:
-                            response = ChatResponse(
-                                message=f"I notice you mentioned {origin} for both origin and destination. Please specify different airports. For example: 'Find flights from {origin} to Delhi' or 'BOM to DEL'.",
-                                parsed_request=parsed_request,
-                                bundles=None,
-                                requires_clarification=True,
-                                clarification_questions=["Where would you like to go?"]
-                            )
-                            response_dict = response.model_dump(mode='json')
-                            await websocket.send_json(response_dict)
-                            continue
-                    
-                    # Convert merged request to search params
                     search_params = BundleSearchParams(
-                        origin=search_request.origin,
-                        destination=destination,
-                        city=city or destination,
-                        max_price=search_request.budget,
-                        tags=search_request.constraints if search_request.constraints else None
+                        origin=merged_request.origin,
+                        destination=merged_request.destination,
+                        city=merged_request.city,
+                        max_price=merged_request.budget,
+                        tags=merged_request.constraints if merged_request.constraints else None
                     )
                     
-                    # Get bundles (this will create them if deals exist)
                     bundle_list = concierge.recommend_bundles(search_params, limit=3)
+                    bundles = [
+                        {
+                            "id": b.id,
+                            "name": b.name,
+                            "description": b.description,
+                            "total_price": b.total_price,
+                            "savings": b.savings,
+                            "tags": b.tags.split(",") if b.tags else []
+                        }
+                        for b in bundle_list
+                    ]
                     
-                    # Format bundles for response
-                    bundles = []
-                    for bundle in bundle_list:
-                        bundles.append({
-                            "id": bundle.id,
-                            "name": bundle.name,
-                            "description": bundle.description,
-                            "total_price": bundle.total_price,
-                            "savings": bundle.savings,
-                            "tags": bundle.tags.split(",") if bundle.tags else []
-                        })
-                    
-                    # Generate response message
                     if bundles:
-                        response_message = f"I found {len(bundles)} great deals for you! "
-                        response_message += f"Here are bundles starting at ${min(b['total_price'] for b in bundles):.2f}. "
-                        response_message += "\n\nWould you like to see more details, ask about policies (refunds, pets, breakfast, etc.), or set up a price watch?"
+                        response_message = f"Found {len(bundles)} great deals! Starting at ${min(b['total_price'] for b in bundles):.2f}."
                         
-                        # Store bundle ID in context for policy questions
+                        # Add explanation for first bundle
                         if bundle_list:
-                            context_manager.get_context(session_id)['last_bundle_id'] = bundle_list[0].id
+                            first_bundle = bundle_list[0]
+                            flight_ids = [int(id) for id in first_bundle.flight_deal_ids.split(",") if id] if first_bundle.flight_deal_ids else []
+                            hotel_ids = [int(id) for id in first_bundle.hotel_deal_ids.split(",") if id] if first_bundle.hotel_deal_ids else []
+                            
+                            bundle_flights = [session.get(FlightDeal, fid) for fid in flight_ids if fid]
+                            bundle_hotels = [session.get(HotelDeal, hid) for hid in hotel_ids if hid]
+                            bundle_flights = [f for f in bundle_flights if f]
+                            bundle_hotels = [h for h in bundle_hotels if h]
+                            
+                            concierge = ConciergeAgent(session)
+                            explanation = concierge.explain_tradeoffs(
+                                first_bundle, bundle_flights, bundle_hotels, bundle_list[:3]
+                            )
+                            response_message += f"\n\n**Why I recommend this:**\n{explanation}"
                     else:
-                        # No bundles found - provide helpful guidance
-                        response_message = "I couldn't find any bundles matching your criteria right now. "
-                        if search_request.origin or search_request.destination or search_request.city:
-                            response_message += f"\n\nI have: "
-                            info_parts = []
-                            if search_request.origin:
-                                info_parts.append(f"origin: {search_request.origin}")
-                            if search_request.destination or search_request.city:
-                                dest = search_request.destination or search_request.city
-                                info_parts.append(f"destination: {dest}")
-                            if search_request.budget:
-                                info_parts.append(f"budget: ${search_request.budget:.0f}")
-                            response_message += ", ".join(info_parts)
-                            response_message += "\n\nWould you like to adjust your search criteria or try a different destination?"
-                        else:
-                            response_message += "Please provide more details about your trip."
+                        response_message = "I couldn't find matching deals. Would you like me to set up a watch to notify you when deals become available?"
                 else:
                     # Need clarification - provide context-aware response
-                    response_message = ""
-                    
-                    # Acknowledge what we already know (FIXED: distinguish between origin and destination)
                     known_info = []
                     if context.get('origin'):
                         known_info.append(f"departing from {context['origin']}")
@@ -622,21 +524,26 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
                         response_message = "I'd like to help you find the perfect trip! "
                     
                     # Ask for missing information
-                    if clarification_questions:
-                        if len(clarification_questions) == 1:
-                            response_message += clarification_questions[0]
+                    questions = []
+                    if 'origin' in missing_fields:
+                        questions.append("Where are you departing from?")
+                    if 'destination' in missing_fields:
+                        questions.append("Where would you like to go?")
+                    if 'budget' in missing_fields:
+                        questions.append("What's your budget?")
+                    
+                    if questions:
+                        if len(questions) == 1:
+                            response_message += questions[0]
                         else:
-                            response_message += "I still need to know: " + ", ".join(clarification_questions[:-1]) + ", and " + clarification_questions[-1] + "."
-                    else:
-                        response_message += "Could you provide more details about your trip?"
+                            response_message += "I still need to know: " + ", ".join(questions[:-1]) + ", and " + questions[-1] + "."
                 
                 # Send response
                 response = ChatResponse(
                     message=response_message,
                     parsed_request=merged_request,
                     bundles=bundles,
-                    requires_clarification=requires_clarification,
-                    clarification_questions=clarification_questions
+                    requires_clarification=len(missing_fields) > 0
                 )
                 
                 # Convert to dict and handle datetime serialization

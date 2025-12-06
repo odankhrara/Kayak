@@ -186,50 +186,39 @@ class NLUParser:
             missing_fields = context.get('_missing_fields', [])
             
             # If we're asking for origin and user provides just a city/airport code
-            # Check this FIRST before any generic extraction
-            if 'origin' in missing_fields:
-                # Don't treat as origin if message contains destination keywords
-                if not any(word in message_lower for word in ['to', 'destination', 'going', 'visit', 'visit']):
-                    # Check city/airport mapping first (before generic extraction)
-                    origin = self._extract_city_or_airport(message_clean)
-                    if not origin:
-                        # Try extracting from message (might have "from" keyword)
-                        origin = self._extract_origin(message_lower)
-                    if origin:
-                        print(f"[NLUParser] Context-aware: treating '{message_clean}' as origin={origin}")
-                        return {
-                            'origin': origin,
-                            'destination': None,
-                            'city': None,
-                            'dates': None,
-                            'budget': None,
-                            'travelers': None,
-                            'constraints': [],
-                            'raw_message': message,
-                            'confidence': 0.9
-                        }
+            if 'origin' in missing_fields and not any(word in message_lower for word in ['to', 'destination', 'going']):
+                # Check city/airport mapping first (before generic extraction)
+                origin = self._extract_city_or_airport(message_clean)
+                if not origin:
+                    origin = self._extract_origin(message_lower)
+                if origin:
+                    return {
+                        'origin': origin,
+                        'destination': None,
+                        'city': None,
+                        'dates': None,
+                        'budget': None,
+                        'travelers': None,
+                        'constraints': [],
+                        'raw_message': message,
+                        'confidence': 0.9
+                    }
             
             # If we're asking for destination and user provides just a city
-            # Only if we're NOT also asking for origin (priority: origin first)
-            if 'destination' in missing_fields and 'origin' not in missing_fields:
-                # Don't treat as destination if message contains origin keywords
-                if not any(word in message_lower for word in ['from', 'depart', 'leaving', 'departure']):
-                    destination = self._extract_city_or_airport(message_clean)
-                    if not destination:
-                        destination = self._extract_destination(message_lower)
-                    if destination:
-                        print(f"[NLUParser] Context-aware: treating '{message_clean}' as destination={destination}")
-                        return {
-                            'origin': None,
-                            'destination': destination,
-                            'city': destination,
-                            'dates': None,
-                            'budget': None,
-                            'travelers': None,
-                            'constraints': [],
-                            'raw_message': message,
-                            'confidence': 0.9
-                        }
+            if 'destination' in missing_fields and not any(word in message_lower for word in ['from', 'depart', 'leaving']):
+                destination = self._extract_destination(message_lower) or self._extract_city_or_airport(message_clean)
+                if destination:
+                    return {
+                        'origin': None,
+                        'destination': destination,
+                        'city': destination,
+                        'dates': None,
+                        'budget': None,
+                        'travelers': None,
+                        'constraints': [],
+                        'raw_message': message,
+                        'confidence': 0.9
+                    }
             
             # If we're asking for budget and user provides just a number
             if 'budget' in missing_fields:
