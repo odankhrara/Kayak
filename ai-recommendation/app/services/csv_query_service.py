@@ -19,7 +19,7 @@ class CSVQueryService:
         Initialize CSV query service
         
         Args:
-            index_db_path: Path to SQLite index database or MySQL connection string
+            index_db_path: Path to index database (MySQL is default, SQLite is fallback)
         """
         # Determine database type (MySQL is default for AI services)
         self.use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
@@ -58,11 +58,11 @@ class CSVQueryService:
                 print(f"⚠️  Failed to connect to MySQL CSV index: {e}")
                 self.index_db = None
         else:
-            # Use SQLite (default)
+            # Use SQLite (fallback only)
             if Path(self.index_db_path).exists():
                 self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
                 self.index_db.row_factory = sqlite3.Row
-                print(f"✅ Connected to SQLite CSV index: {self.index_db_path}")
+                print(f"✅ Connected to SQLite CSV index (fallback): {self.index_db_path}")
             else:
                 print(f"⚠️  Index database not found at {self.index_db_path}. Run indexer first.")
                 self.index_db = None

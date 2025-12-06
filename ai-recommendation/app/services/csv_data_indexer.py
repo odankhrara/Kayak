@@ -32,7 +32,7 @@ class CSVDataIndexer:
         
         Args:
             data_dir: Directory containing CSV files (default: ./data/raw)
-            index_db_path: Path to SQLite index database or MySQL connection string (default: ./csv_index.db)
+            index_db_path: Path to index database (default: ./csv_index.db, but MySQL is used by default)
         """
         if data_dir is None:
             data_dir = os.getenv("DATASETS_DIR", "./data/raw")
@@ -73,9 +73,9 @@ class CSVDataIndexer:
             self.index_db = self.engine.connect()
             print(f"✅ Using MySQL for CSV index: {csv_db_name}")
         else:
-            # Use SQLite (default)
+            # Use SQLite (fallback only)
             self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
-            print(f"✅ Using SQLite for CSV index: {self.index_db_path}")
+            print(f"✅ Using SQLite for CSV index (fallback): {self.index_db_path}")
         
         cursor = self._get_cursor()
         

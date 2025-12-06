@@ -370,7 +370,7 @@ def main():
     print("=" * 60)
     
     index_db = os.getenv("CSV_INDEX_DB", "./csv_index.db")
-    if not Path(index_db).exists() and not os.getenv("USE_MYSQL", "false").lower() == "true":
+    if not Path(index_db).exists() and not os.getenv("USE_MYSQL", "true").lower() == "true":
         print("CSV index not found. Indexing CSV files...")
         index_csv_data()
     else:

@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, create_engine, Session
 import os
 from typing import Generator
 
-# Database URL - MySQL for production, SQLite fallback for development
+# Database URL - MySQL is default for AI services, SQLite is fallback
 # MySQL connection: mysql+pymysql://user:password@host:port/database
 mysql_host = os.getenv("MYSQL_HOST", "localhost")
 mysql_port = os.getenv("MYSQL_PORT", "3307")
