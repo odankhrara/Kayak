@@ -1,121 +1,36 @@
-version: '3.8'
-
 services:
-  api-gateway:
-    build:
-      context: ../../
-      dockerfile: src/services/api-gateway/Dockerfile
-    container_name: kayak-api-gateway
-    ports:
-      - "4000:4000"
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: kayak-zookeeper
     environment:
-      NODE_ENV: development
-      PORT: 4000
-      USER_SERVICE_URL: http://user-service:8001
-      LISTING_SERVICE_URL: http://listing-service:8002
-      BOOKING_BILLING_SERVICE_URL: http://booking-billing-service:8003
-      # ANALYTICS_SERVICE_URL: http://analytics-service:8004 # Uncomment if analytics-service is added back
-      # AI_SERVICE_URL: http://ai-service:8005 # Uncomment if AI service is added
-      ADMIN_SERVICE_URL: http://admin-service:8006
-      JWT_SECRET: your-secret-key # IMPORTANT: Set this in production!
-      KAFKA_BROKERS: kafka:9092
-    depends_on:
-      - user-service
-      - listing-service
-      - booking-billing-service
-      - admin-service
-      - kafka
-      # - analytics-service # Uncomment if analytics-service is added back
-      # - ai-service # Uncomment if AI service is added 
-  
-  admin-service:
-    build:
-      context: ../../
-      dockerfile: src/services/admin-service/Dockerfile
-    container_name: kayak-admin-service
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "8006:8006"
-    environment:
-      NODE_ENV: development
-      PORT: 8006
-      MYSQL_HOST: mysql
-      MYSQL_USER: kayak
-      MYSQL_PASSWORD: password
-      MYSQL_DATABASE: kayak
-      JWT_SECRET: your-secret-key
-    depends_on:
-      mysql:
-        condition: service_healthy 
+      - "2181:2181"
 
-  booking-billing-service:
-    build:
-      context: ../../
-      dockerfile: src/services/booking-billing-service/Dockerfile
-    container_name: kayak-booking-billing-service
-    ports:
-      - "8003:8003"
-    environment:
-      NODE_ENV: development
-      PORT: 8003
-      MYSQL_HOST: mysql
-      MYSQL_USER: kayak
-      MYSQL_PASSWORD: password
-      MYSQL_DATABASE: kayak
-      MONGODB_URI: mongodb://mongodb:27017/kayak
-      KAFKA_BROKERS: kafka:9092
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kayak-kafka
     depends_on:
-      mysql:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-  
-  listing-service:
-    build:
-      context: ../../
-      dockerfile: src/services/listing-service/Dockerfile
-    container_name: kayak-listing-service
+      - zookeeper
     ports:
-      - "8002:8002"
+      - "9092:9092"
     environment:
-      NODE_ENV: development
-      PORT: 8002
-      MONGODB_URI: mongodb://mongodb:27017/kayak
-      MYSQL_HOST: mysql
-      MYSQL_USER: kayak
-      MYSQL_PASSWORD: password
-      MYSQL_DATABASE: kayak
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      mysql:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  user-service:
-    build:
-      context: ../../
-      dockerfile: src/services/user-service/Dockerfile
-    container_name: kayak-user-service
-    ports:
-      - "8001:8001"
-    environment:
-      NODE_ENV: development
-      PORT: 8001
-      MONGODB_URI: mongodb://mongodb:27017/kayak
-      MYSQL_HOST: mysql
-      MYSQL_USER: kayak
-      MYSQL_PASSWORD: password
-      MYSQL_DATABASE: kayak
-      JWT_SECRET: your-secret-key
-    depends_on:
-      mysql:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "kafka-broker-api-versions",
+          "--bootstrap-server",
+          "localhost:9092",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   mysql:
     image: mysql:8.0
@@ -165,47 +80,132 @@ services:
       timeout: 5s
       retries: 5
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    container_name: kayak-zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+  admin-service:
+    build:
+      context: ../../
+      dockerfile: src/services/admin-service/Dockerfile
+    container_name: kayak-admin-service
     ports:
-      - "2181:2181"
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "2181"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  kafka:
-    image: confluentinc/cp-kafka:7.4.0
-    container_name: kayak-kafka
+      - "8006:8006"
+    environment:
+      NODE_ENV: development
+      PORT: 8006
+      MYSQL_HOST: mysql
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+      JWT_SECRET: your_admin_jwt_secret
     depends_on:
-      zookeeper:
-        condition: service_healthy
+      - mysql
+
+  analytics-service:
+    build:
+      context: ../../
+      dockerfile: src/services/analytics-service/Dockerfile
+    container_name: kayak-analytics-service
     ports:
-      - "9092:9092"
-      - "29092:29092"
+      - "8004:8004"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # Internal listener for Docker containers, External for host
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:9092"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      NODE_ENV: development
+      PORT: 8004
+      MYSQL_HOST: mysql
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+      REDIS_HOST: redis
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      - mysql
+      - redis
+      - kafka
+
+  booking-billing-service:
+    build:
+      context: ../../
+      dockerfile: src/services/booking-billing-service/Dockerfile
+    container_name: kayak-booking-billing-service
+    ports:
+      - "8003:8003"
+    environment:
+      NODE_ENV: development
+      PORT: 8003
+      MYSQL_HOST: mysql
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+      MONGODB_URI: mongodb://mongodb:27017/kayak
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      - mysql
+      - mongodb
+      - kafka
+
+  listing-service:
+    build:
+      context: ../../
+      dockerfile: src/services/listing-service/Dockerfile
+    container_name: kayak-listing-service
+    ports:
+      - "8002:8002"
+    environment:
+      NODE_ENV: development
+      PORT: 8002
+      MONGODB_URI: mongodb://mongodb:27017/kayak
+      MYSQL_HOST: mysql
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - mysql
+      - mongodb
+      - redis
+
+  user-service:
+    build:
+      context: ../../
+      dockerfile: src/services/user-service/Dockerfile
+    container_name: kayak-user-service
+    ports:
+      - "8001:8001"
+    environment:
+      NODE_ENV: development
+      PORT: 8001
+      MONGODB_URI: mongodb://mongodb:27017/kayak
+      MYSQL_HOST: mysql
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+
+  api-gateway:
+    build:
+      context: ../../
+      dockerfile: src/services/api-gateway/Dockerfile
+    container_name: kayak-api-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      USER_SERVICE_URL: http://user-service:8001
+      LISTING_SERVICE_URL: http://listing-service:8002
+      BOOKING_BILLING_SERVICE_URL: http://booking-billing-service:8003
+      # ANALYTICS_SERVICE_URL: http://analytics-service:8004 # Uncomment if analytics-service is added back
+      # AI_SERVICE_URL: http://ai-service:8005 # Uncomment if AI service is added
+      ADMIN_SERVICE_URL: http://admin-service:8006
+      JWT_SECRET: your_jwt_secret # IMPORTANT: Set this in production!
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      - user-service
+      - listing-service
+      - booking-billing-service
+      - admin-service
+      - kafka
+      # - analytics-service # Uncomment if analytics-service is added back
+      # - ai-service # Uncomment if AI service is added
+    command: sh -c "sleep 50 && npm start"
 
 volumes:
   mysql_data:
   mongo_data:
   redis_data:
-
-
