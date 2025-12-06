@@ -16,8 +16,9 @@ FastAPI-based AI recommendation service for the Kayak Travel Booking System. Thi
 
 - Python 3.11+
 - Poetry (recommended) or pip
-- Kafka running (for ingestion worker)
-- Database (SQLite for dev, MySQL for production)
+- Kafka running (optional - for ingestion worker)
+- **SQLite3** (default - no setup required, database file created automatically)
+- MySQL (optional - for production, set `USE_MYSQL=true`)
 
 ### Installation
 
@@ -34,11 +35,30 @@ pip install -r requirements.txt
 Create a `.env` file:
 
 ```env
-DATABASE_URL=sqlite:///./ai_recommendations.db
+# Database Configuration (SQLite is default - no setup required)
+USE_MYSQL=false                    # Set to false to use SQLite (default)
+DATABASE_URL=sqlite:///./ai_recommendations.db  # SQLite database file (auto-created)
+
+# OR for MySQL (optional):
+# USE_MYSQL=true
+# MYSQL_HOST=localhost
+# MYSQL_PORT=3307
+# MYSQL_USER=root
+# MYSQL_PASSWORD=password
+# MYSQL_DATABASE=kayak
+
+# AI Configuration
+USE_AI=true
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.1-70b-versatile
+
+# Kafka Configuration (optional)
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 KAFKA_TOPIC_RAW_FEEDS=raw_supplier_feeds
 CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 ```
+
+**Note:** SQLite3 is the default database. The database file `ai_recommendations.db` will be created automatically in the `ai-recommendation` directory when you first run the service. No database setup is required!
 
 ### Running the Service
 

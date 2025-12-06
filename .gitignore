@@ -45,3 +45,7 @@ ai-recommendation/data/raw/reviews 2.csv
 
 # Environment files with secrets
 ai-recommendation/.env
+ai-recommendation/.env.backup
+ai-recommendation/.env.bak
+ai-recommendation/.env.mysql
+ai-recommendation/data/raw/listings 2.csv
