@@ -4,32 +4,38 @@
 
 ### 1. **Main AI Service Database** 
 **Location:** `ai-recommendation/app/db/session.py`
-- **File:** `ai_recommendations.db` (created in `ai-recommendation/` directory)
+- **Database:** MySQL (`kayak` database)
 - **Usage:** Main database for AI recommendation service
 - **Tables:** FlightDeal, HotelDeal, Bundle, PriceWatch, etc.
 - **Configuration:** 
-  - Default: SQLite (`sqlite:///./ai_recommendations.db`)
-  - Can switch to MySQL with `USE_MYSQL=true`
+  - **Default: MySQL** (`mysql+pymysql://user:password@host:port/kayak`)
+  - SQLite is fallback (only if `USE_MYSQL=false`)
 - **Code Reference:**
   ```python
-  # Line 23: Fallback to SQLite
+  # Line 18: MySQL is default
+  use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
+  # Line 23: SQLite fallback (only if USE_MYSQL=false)
   DATABASE_URL = "sqlite:///./ai_recommendations.db"
   ```
 
 ### 2. **CSV Index Database**
 **Location:** `ai-recommendation/app/services/csv_data_indexer.py` and `csv_query_service.py`
-- **File:** `csv_index.db` (created in `ai-recommendation/` directory)
+- **Database:** MySQL (`kayak_csv_index` database)
 - **Usage:** Indexes all CSV datasets for fast querying
 - **Tables:** hotels, flights, airports, routes, delays
 - **Configuration:**
-  - Default: SQLite (`./csv_index.db`)
-  - Can switch to MySQL with `USE_MYSQL=true` (uses `kayak_csv_index` database)
+  - **Default: MySQL** (`kayak_csv_index` database)
+  - SQLite is fallback (only if `USE_MYSQL=false`, uses `./csv_index.db`)
 - **Code References:**
   ```python
-  # csv_data_indexer.py line 77
+  # csv_data_indexer.py line 42: MySQL is default
+  self.use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
+  # csv_data_indexer.py line 77: SQLite fallback
   self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
   
-  # csv_query_service.py line 63
+  # csv_query_service.py line 25: MySQL is default
+  self.use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
+  # csv_query_service.py line 63: SQLite fallback
   self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
   ```
 
@@ -71,52 +77,59 @@ SQLite is mentioned in:
 
 ## 🔄 Current Status
 
-### **Main Database (ai_recommendations.db)**
-- **Status:** ✅ Configured to use MySQL (when `USE_MYSQL=true`)
-- **Fallback:** SQLite (when `USE_MYSQL=false` or not set)
+### **Main Database (MySQL: `kayak` database)**
+- **Status:** ✅ **MySQL is DEFAULT** for all AI services
+- **Default:** MySQL (`kayak` database)
+- **Fallback:** SQLite (`ai_recommendations.db` only when `USE_MYSQL=false`)
 - **Location:** `ai-recommendation/app/db/session.py`
 
-### **CSV Index Database (csv_index.db)**
-- **Status:** ✅ Supports both SQLite and MySQL
-- **Default:** SQLite (`./csv_index.db`)
-- **MySQL Option:** Uses `kayak_csv_index` database when `USE_MYSQL=true`
+### **CSV Index Database (MySQL: `kayak_csv_index` database)**
+- **Status:** ✅ **MySQL is DEFAULT** for CSV indexing
+- **Default:** MySQL (`kayak_csv_index` database)
+- **Fallback:** SQLite (`./csv_index.db` only when `USE_MYSQL=false`)
 - **Locations:**
   - `ai-recommendation/app/services/csv_data_indexer.py`
   - `ai-recommendation/app/services/csv_query_service.py`
 
 ## 📊 Summary
 
-**Total SQLite Usage:**
-- **2 Database Files:**
-  1. `ai_recommendations.db` - Main AI service database
-  2. `csv_index.db` - CSV data index
+**Current Database Configuration:**
+- **MySQL Databases (DEFAULT):**
+  1. `kayak` - Main AI service database
+  2. `kayak_csv_index` - CSV data index
 
-- **2 Main Files Using SQLite:**
-  1. `ai-recommendation/app/db/session.py` - Main database session
-  2. `ai-recommendation/app/services/csv_data_indexer.py` - CSV indexer
-  3. `ai-recommendation/app/services/csv_query_service.py` - CSV query service
+- **SQLite Files (FALLBACK ONLY):**
+  1. `ai_recommendations.db` - Only used if `USE_MYSQL=false`
+  2. `csv_index.db` - Only used if `USE_MYSQL=false`
 
-- **Both support MySQL fallback** when `USE_MYSQL=true` is set
+- **Files Supporting Both:**
+  1. `ai-recommendation/app/db/session.py` - Main database session (MySQL default)
+  2. `ai-recommendation/app/services/csv_data_indexer.py` - CSV indexer (MySQL default)
+  3. `ai-recommendation/app/services/csv_query_service.py` - CSV query service (MySQL default)
+
+- **MySQL is the default** - SQLite is only used as fallback when `USE_MYSQL=false`
 
 ## ⚙️ Configuration
 
-**To use SQLite (default):**
+**MySQL is DEFAULT (Recommended):**
 ```bash
-# In .env file:
-USE_MYSQL=false
-# OR omit USE_MYSQL entirely
-```
-
-**To use MySQL:**
-```bash
-# In .env file:
-USE_MYSQL=true
+# In .env file (MySQL is default, no need to set USE_MYSQL):
 MYSQL_HOST=localhost
 MYSQL_PORT=3307
 MYSQL_USER=root
 MYSQL_PASSWORD=password
 MYSQL_DATABASE=kayak
-CSV_INDEX_DB_NAME=kayak_csv_index
+CSV_INDEX_DB_NAME=kayak_csv_index  # CSV index database
+
+# Or explicitly set:
+USE_MYSQL=true
+```
+
+**To use SQLite (fallback only):**
+```bash
+# In .env file:
+USE_MYSQL=false
+# This will use SQLite files: ai_recommendations.db and csv_index.db
 ```
 
 ## 🔍 Files That Import/Use SQLite
@@ -128,8 +141,10 @@ CSV_INDEX_DB_NAME=kayak_csv_index
 
 ## 📝 Notes
 
-- SQLite is used as a **fallback/development** option
-- MySQL is the **production/preferred** option (when configured)
-- Both databases can coexist - SQLite for dev, MySQL for production
-- CSV indexer defaults to SQLite but can use MySQL for consistency
+- **MySQL is the DEFAULT** for all AI services
+- SQLite is used as a **fallback/development** option (only when `USE_MYSQL=false`)
+- **Production:** MySQL is recommended and default
+- **Development:** Can use SQLite by setting `USE_MYSQL=false`
+- Both databases can coexist - MySQL for production, SQLite for local dev if needed
+- CSV indexer defaults to MySQL (`kayak_csv_index` database) for consistency
 
