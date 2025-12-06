@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Hotel as HotelIcon, Star, MapPin } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Hotel as HotelIcon, Star, MapPin, Gavel, Scale } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { hotelService } from '../services/hotel.service';
 import { Hotel } from '../types';
 import Button from '../components/common/Button';
@@ -10,15 +10,20 @@ import Card from '../components/common/Card';
 import Loading, { SkeletonCard } from '../components/common/Loading';
 import Select from '../components/common/Select';
 import Input from '../components/common/Input';
+import LocationAutocomplete from '../components/common/LocationAutocomplete';
 import { formatCurrency, calculateNights } from '../utils/formatters';
-import { SORT_OPTIONS, STAR_RATINGS, US_STATES } from '../utils/constants';
+import { SORT_OPTIONS, STAR_RATINGS } from '../utils/constants';
 import { toast } from 'react-toastify';
 import { useAuthStore } from '../store/authStore';
+import { trackSearch, trackBookingAttempt } from '../utils/clickTracking';
+import { MakeOfferModal } from '../components/bidding';
+import FavoriteButton from '../components/favorites/FavoriteButton';
+import { ComparisonBar, ComparisonItem } from '../components/comparison';
 
 const HotelSearch = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -26,6 +31,18 @@ const HotelSearch = () => {
   const [sortBy, setSortBy] = useState('price');
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
+  const [hotelChainFilter, setHotelChainFilter] = useState('');
+  
+  // Location state for autocomplete
+  const [selectedCity, setSelectedCity] = useState('');
+  const [selectedState, setSelectedState] = useState('');
+  
+  // Comparison state
+  const [comparisonItems, setComparisonItems] = useState<ComparisonItem[]>([]);
+  
+  // Bidding state
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [selectedHotelForBid, setSelectedHotelForBid] = useState<Hotel | null>(null);
 
   const filters = {
     city: searchParams.get('city') || '',
@@ -47,11 +64,90 @@ const HotelSearch = () => {
     enabled: !!filters.city,
   });
 
+  // Track search results when hotels are loaded
+  useEffect(() => {
+    if (hotels && filters.city) {
+      trackSearch({
+        type: 'hotel',
+        city: filters.city,
+        state: filters.state,
+        checkIn: filters.checkIn,
+        checkOut: filters.checkOut,
+        guests: filters.guests,
+        rooms: filters.rooms,
+      }, hotels.length);
+    }
+  }, [hotels]);
+
   const nights = filters.checkIn && filters.checkOut 
     ? calculateNights(filters.checkIn, filters.checkOut)
     : 0;
 
+  // Extract unique hotel chains from search results
+  const uniqueHotelChains = useMemo(() => {
+    if (!hotels) return [];
+    // Extract first word of hotel name as chain (e.g., "Hilton San Jose" -> "Hilton")
+    const chains = [...new Set(hotels.map(h => h.hotelName.split(' ')[0]))].filter(Boolean).sort();
+    return chains;
+  }, [hotels]);
+
+  // Filter hotels by chain
+  const filteredHotels = useMemo(() => {
+    if (!hotels || !hotelChainFilter) return hotels;
+    return hotels.filter(h => h.hotelName.toLowerCase().startsWith(hotelChainFilter.toLowerCase()));
+  }, [hotels, hotelChainFilter]);
+
+  // Comparison handlers
+  const isInComparison = (hotelId: string) => {
+    return comparisonItems.some(item => item.id === hotelId);
+  };
+
+  const toggleComparison = (hotel: Hotel) => {
+    if (isInComparison(hotel.hotelId)) {
+      setComparisonItems(items => items.filter(item => item.id !== hotel.hotelId));
+    } else {
+      if (comparisonItems.length >= 3) {
+        toast.warning('You can compare up to 3 hotels at a time');
+        return;
+      }
+      const pricePerNight = hotel.rooms?.[0]?.pricePerNight || 0;
+      const newItem: ComparisonItem = {
+        id: hotel.hotelId,
+        type: 'hotel',
+        name: hotel.hotelName,
+        provider: hotel.hotelName.split(' ')[0], // Hotel chain
+        price: pricePerNight * nights,
+        rating: hotel.rating || hotel.hotelRating,
+        details: {
+          starRating: hotel.starRating,
+          pricePerNight: pricePerNight,
+          totalRooms: hotel.totalRooms,
+          city: hotel.city,
+          state: hotel.state,
+          amenities: hotel.amenities?.slice(0, 5).map((a: any) => typeof a === 'string' ? a : a.name).join(', ') || 'N/A',
+        }
+      };
+      setComparisonItems(items => [...items, newItem]);
+      toast.success(`Added ${hotel.hotelName} to comparison`);
+    }
+  };
+
+  const removeFromComparison = (id: string) => {
+    setComparisonItems(items => items.filter(item => item.id !== id));
+  };
+
+  const clearComparison = () => {
+    setComparisonItems([]);
+  };
+
   const handleBookHotel = (hotel: Hotel) => {
+    // Track booking attempt
+    trackBookingAttempt(
+      hotel.hotelId,
+      'hotel',
+      (hotel.rooms?.[0]?.pricePerNight || 0) * nights
+    );
+
     if (!isAuthenticated) {
       toast.error('Please login to book this hotel');
       navigate('/login', {
@@ -80,6 +176,16 @@ const HotelSearch = () => {
     });
   };
 
+  const handleMakeOffer = (hotel: Hotel) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to make an offer');
+      navigate('/login');
+      return;
+    }
+    setSelectedHotelForBid(hotel);
+    setShowBidModal(true);
+  };
+
   if (!filters.city) {
     return (
       <div className="container mx-auto px-4 py-12">
@@ -99,6 +205,12 @@ const HotelSearch = () => {
               const checkInValue = formData.get('checkIn') as string;
               const checkOutValue = formData.get('checkOut') as string;
               
+              // Validate location is selected
+              if (!selectedCity || !selectedState) {
+                toast.error('Please select a location from the dropdown');
+                return;
+              }
+              
               // Validate check-out is after check-in
               if (checkInValue && checkOutValue) {
                 const checkInDateObj = new Date(checkInValue);
@@ -111,8 +223,8 @@ const HotelSearch = () => {
               }
               
               const params = new URLSearchParams({
-                city: formData.get('city') as string,
-                state: formData.get('state') as string,
+                city: selectedCity,
+                state: selectedState,
                 checkIn: checkInValue,
                 checkOut: checkOutValue,
                 guests: formData.get('guests') as string || '2',
@@ -120,25 +232,19 @@ const HotelSearch = () => {
               });
               navigate(`/hotels?${params.toString()}`);
             }}>
-              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  💡 <strong>Tip:</strong> Make sure your city and state match (e.g., Miami + Florida, Chicago + Illinois)
-                </p>
-              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <Input
-                  type="text"
-                  name="city"
-                  label="City"
-                  placeholder="e.g., Chicago, Miami, New York"
-                  required
-                />
-                <Select
-                  name="state"
-                  label="State"
-                  options={[{ value: '', label: 'Select State' }, ...US_STATES]}
-                  required
-                />
+                <div className="md:col-span-2">
+                  <LocationAutocomplete
+                    value={selectedCity ? `${selectedCity}, ${selectedState}` : ''}
+                    onChange={(city, state) => {
+                      setSelectedCity(city);
+                      setSelectedState(state);
+                    }}
+                    placeholder="Search cities with hotels..."
+                    label="Destination"
+                    required
+                  />
+                </div>
                 <Input
                   type="date"
                   name="checkIn"
@@ -275,6 +381,30 @@ const HotelSearch = () => {
               </div>
             </div>
 
+            {/* Hotel Chain Filter */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                🏨 Hotel Chain
+              </label>
+              <select
+                value={hotelChainFilter}
+                onChange={(e) => setHotelChainFilter(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Hotels</option>
+                {uniqueHotelChains.map((chain) => (
+                  <option key={chain} value={chain}>
+                    {chain}
+                  </option>
+                ))}
+              </select>
+              {uniqueHotelChains.length > 0 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  {uniqueHotelChains.length} chain{uniqueHotelChains.length !== 1 ? 's' : ''} available
+                </p>
+              )}
+            </div>
+
             <Button
               variant="outline"
               fullWidth
@@ -282,6 +412,7 @@ const HotelSearch = () => {
                 setMinPrice('');
                 setMaxPrice('');
                 setMinStars('');
+                setHotelChainFilter('');
                 setSortBy('price');
               }}
             >
@@ -293,7 +424,7 @@ const HotelSearch = () => {
         <div className="lg:col-span-3 space-y-4">
           {isLoading && <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>}
 
-          {!isLoading && (!hotels || hotels.length === 0) && (
+          {!isLoading && (!filteredHotels || filteredHotels.length === 0) && (
             <Card className="p-12 text-center">
               <HotelIcon className="w-16 h-16 mx-auto mb-4 text-slate-400" />
               <h3 className="text-2xl font-bold mb-2">No Hotels Found</h3>
@@ -321,7 +452,7 @@ const HotelSearch = () => {
             </Card>
           )}
 
-          {hotels?.map((hotel, index) => (
+          {filteredHotels?.map((hotel, index) => (
             <motion.div
               key={hotel.hotelId}
               initial={{ opacity: 0, y: 20 }}
@@ -330,23 +461,46 @@ const HotelSearch = () => {
             >
               <Card interactive>
                 <div className="flex flex-col md:flex-row gap-6">
-                  <div className="w-full md:w-48 h-48 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                  <div 
+                    className="w-full md:w-48 h-48 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => navigate(`/hotels/${hotel.hotelId}?checkIn=${filters.checkIn}&checkOut=${filters.checkOut}&guests=${filters.guests}&rooms=${filters.rooms}`)}
+                  >
                     <HotelIcon className="w-16 h-16 text-white" />
                   </div>
 
                   <div className="flex-1">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="text-xl font-bold mb-1">{hotel.hotelName}</h3>
+                        <h3 
+                          className="text-xl font-bold mb-1 cursor-pointer hover:text-blue-600 transition-colors"
+                          onClick={() => navigate(`/hotels/${hotel.hotelId}?checkIn=${filters.checkIn}&checkOut=${filters.checkOut}&guests=${filters.guests}&rooms=${filters.rooms}`)}
+                        >
+                          {hotel.hotelName}
+                        </h3>
                         <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
                           <MapPin className="w-4 h-4" />
                           <span>{hotel.city}, {hotel.state}</span>
                         </div>
                       </div>
-                      <div className="flex">
-                        {Array.from({ length: hotel.starRating }).map((_, i) => (
-                          <Star key={i} className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                        ))}
+                      <div className="flex items-center gap-2">
+                        <div className="flex">
+                          {Array.from({ length: hotel.starRating }).map((_, i) => (
+                            <Star key={i} className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                          ))}
+                        </div>
+                        {/* Compare Button */}
+                        <button
+                          onClick={() => toggleComparison(hotel)}
+                          className={`p-2 rounded-lg transition-all ${
+                            isInComparison(hotel.hotelId)
+                              ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30'
+                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700'
+                          }`}
+                          title={isInComparison(hotel.hotelId) ? 'Remove from comparison' : 'Add to comparison'}
+                        >
+                          <Scale className="w-4 h-4" />
+                        </button>
+                        <FavoriteButton itemType="hotel" itemId={hotel.hotelId} />
                       </div>
                     </div>
 
@@ -377,13 +531,26 @@ const HotelSearch = () => {
                         )}
                       </div>
                       <div className="text-right">
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          {formatCurrency(hotel.rooms?.[0]?.pricePerNight || 0)}<span className="text-xs">/night</span>
+                        </p>
                         <p className="text-2xl font-bold text-blue-600">
                           {formatCurrency((hotel.rooms?.[0]?.pricePerNight || 0) * nights)}
                         </p>
-                        <p className="text-sm text-slate-500">{nights} {nights === 1 ? 'night' : 'nights'}</p>
-                        <Button onClick={() => handleBookHotel(hotel)} className="mt-2">
-                          Book Now
-                        </Button>
+                        <p className="text-sm text-slate-500">Total for {nights} {nights === 1 ? 'night' : 'nights'}</p>
+                        <div className="flex gap-2 mt-2 justify-end">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => handleMakeOffer(hotel)}
+                            className="flex items-center gap-1"
+                          >
+                            <Gavel className="w-4 h-4" />
+                            Make Offer
+                          </Button>
+                          <Button onClick={() => handleBookHotel(hotel)}>
+                            Book Now
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -393,6 +560,36 @@ const HotelSearch = () => {
           ))}
         </div>
       </div>
+
+      {/* Make Offer Modal */}
+      {selectedHotelForBid && (
+        <MakeOfferModal
+          isOpen={showBidModal}
+          onClose={() => {
+            setShowBidModal(false);
+            setSelectedHotelForBid(null);
+          }}
+          itemType="hotel"
+          itemId={selectedHotelForBid.hotelId}
+          itemName={selectedHotelForBid.hotelName}
+          originalPrice={(selectedHotelForBid.rooms?.[0]?.pricePerNight || 0) * nights}
+          onSuccess={(bid) => {
+            console.log('Bid submitted:', bid);
+          }}
+        />
+      )}
+
+      {/* Comparison Bar */}
+      <AnimatePresence>
+        {comparisonItems.length > 0 && (
+          <ComparisonBar
+            items={comparisonItems}
+            onRemove={removeFromComparison}
+            onClear={clearComparison}
+            maxItems={3}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

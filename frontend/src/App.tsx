@@ -23,6 +23,10 @@ import AdminDashboardPage from './pages/AdminDashboardPage';
 import HostAnalysisPage from './pages/HostAnalysisPage';
 import AIAssistantPage from './pages/AIAssistantPage';
 import MyTrips from './pages/MyTrips';
+import CompleteBidBooking from './pages/CompleteBidBooking';
+import HotelDetail from './pages/HotelDetail';
+import CarDetail from './pages/CarDetail';
+import FlightDetail from './pages/FlightDetail';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -40,7 +44,16 @@ const queryClient = new QueryClient({
 
 // Protected Route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isLoading } = useAuthStore();
+  
+  // Wait for auth initialization before redirecting
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -51,7 +64,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Admin Route component
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+  
+  // Wait for auth initialization before redirecting
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -84,8 +106,11 @@ function App() {
             
             {/* Search routes */}
             <Route path="/flights" element={<FlightSearch />} />
+            <Route path="/flights/:flightId" element={<FlightDetail />} />
             <Route path="/hotels" element={<HotelSearch />} />
+            <Route path="/hotels/:hotelId" element={<HotelDetail />} />
             <Route path="/cars" element={<CarSearch />} />
+            <Route path="/cars/:carId" element={<CarDetail />} />
             
             {/* Protected routes */}
             <Route
@@ -133,6 +158,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <MyTrips />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/booking/complete-bid"
+              element={
+                <ProtectedRoute>
+                  <CompleteBidBooking />
                 </ProtectedRoute>
               }
             />

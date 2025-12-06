@@ -23,31 +23,42 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
       checkOutDate, 
       totalAmount, 
       paymentMethod, 
-      paymentDetails 
+      paymentDetails,
+      bidId,           // Optional: ID of accepted bid
+      originalPrice,   // Optional: Original price (for bid tracking)
+      roomSelections   // Optional: Array of room selections for multi-room hotel bookings
     } = req.body
 
-    if (!bookingType || !entityId || !quantity || !checkInDate || !checkOutDate || !totalAmount || !paymentMethod || !paymentDetails) {
+    if (!bookingType || !entityId || !checkInDate || !checkOutDate || !totalAmount || !paymentMethod || !paymentDetails) {
       return res.status(400).json({
         error: 'Missing required fields',
-        required: ['bookingType', 'entityId', 'quantity', 'checkInDate', 'checkOutDate', 'totalAmount', 'paymentMethod', 'paymentDetails']
+        required: ['bookingType', 'entityId', 'checkInDate', 'checkOutDate', 'totalAmount', 'paymentMethod', 'paymentDetails']
       })
     }
+
+    // For hotel bookings with room selections, quantity is derived from selections
+    const bookingQuantity = roomSelections 
+      ? roomSelections.reduce((sum: number, r: any) => sum + r.quantity, 0)
+      : (quantity || 1);
 
     // Create booking with payment (full transaction with rollback)
     const result = await bookingService.createBookingWithPayment({
       userId,
       bookingType,
       entityId,
-      quantity,
+      quantity: bookingQuantity,
       checkInDate,
       checkOutDate,
       totalAmount,
       paymentMethod,
-      paymentDetails
+      paymentDetails,
+      roomSelections
     })
 
     try {
       const booking = result.booking
+      
+      // Standard booking created event
       await sendKafkaMessage(KAFKA_TOPICS.BOOKING_CREATED, {
         bookingId: booking.bookingId,
         userId: booking.userId,
@@ -55,11 +66,33 @@ router.post('/create', requireAuth, async (req: Request, res: Response) => {
         status: booking.status,
         createdAt: booking.createdAt || new Date().toISOString()
       })
+      
+      // If this booking was from an accepted bid, track it
+      if (bidId) {
+        await sendKafkaMessage(KAFKA_TOPICS.USER_TRACKING, {
+          log_type: 'bid_booking_completed',
+          user_id: userId,
+          bid_id: bidId,
+          booking_id: booking.bookingId,
+          booking_type: bookingType,
+          entity_id: entityId,
+          original_price: originalPrice || totalAmount,
+          final_price: totalAmount,
+          savings: originalPrice ? (originalPrice - totalAmount) : 0,
+          discount_percent: originalPrice ? ((originalPrice - totalAmount) / originalPrice * 100).toFixed(2) : 0,
+          timestamp: new Date().toISOString()
+        })
+      }
     } catch (kafkaError) {
       console.error('Kafka publish failed for booking create:', kafkaError)
     }
 
-    res.status(201).json(result)
+    // Return bid info if applicable
+    res.status(201).json({
+      ...result,
+      bidId: bidId || null,
+      savings: originalPrice ? (originalPrice - totalAmount) : 0
+    })
   } catch (error: any) {
     console.error('Create booking error:', error.message)
     res.status(400).json({ error: error.message })

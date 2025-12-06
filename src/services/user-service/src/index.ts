@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import { errorHandler } from '@kayak/common/src/middleware/errorHandler'
 import userController from './controllers/userController'
 import imageController from './controllers/imageController'
+import creditCardController from './controllers/creditCardController'
 
 dotenv.config()
 
@@ -19,6 +20,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/users', userController)
 app.use('/api/users', imageController)
+app.use('/api/users', creditCardController)
 
 app.use(errorHandler)
 

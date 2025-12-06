@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { GridFSBucket, ObjectId } from 'mongodb';
-import { getMongoClient } from '../../../common/src/db/mongoClient';
+import { getMongoClient } from '@kayak/common/src/db/mongoClient';
 import { Readable } from 'stream';
 import sharp from 'sharp';
 

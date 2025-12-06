@@ -6,6 +6,32 @@ const router = Router()
 const hotelService = new HotelService()
 
 /**
+ * @route   GET /api/hotels/locations
+ * @desc    Get all unique city-state combinations for autocomplete
+ * @access  Public
+ * @query   q (search term)
+ */
+router.get('/locations', async (req: Request, res: Response) => {
+  try {
+    const searchTerm = req.query.q as string
+    const locations = await hotelService.getLocations(searchTerm)
+    
+    res.json({
+      count: locations.length,
+      locations: locations.map(loc => ({
+        city: loc.city,
+        state: loc.state,
+        label: `${loc.city}, ${loc.state}`,
+        hotelCount: loc.hotelCount
+      }))
+    })
+  } catch (error: any) {
+    console.error('Get locations error:', error.message)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+/**
  * @route   GET /api/hotels/search
  * @desc    Search hotels with filters
  * @access  Public

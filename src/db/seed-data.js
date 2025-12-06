@@ -51,7 +51,17 @@ const cities = {
   'OR': ['Portland', 'Eugene', 'Salem', 'Gresham'],
   'GA': ['Atlanta', 'Augusta', 'Columbus', 'Savannah'],
   'NC': ['Charlotte', 'Raleigh', 'Greensboro', 'Durham'],
-  'MI': ['Detroit', 'Grand Rapids', 'Warren', 'Sterling Heights']
+  'MI': ['Detroit', 'Grand Rapids', 'Warren', 'Sterling Heights'],
+  // Added missing states to eliminate "Default City" placeholder
+  'OH': ['Columbus', 'Cleveland', 'Cincinnati', 'Toledo', 'Akron', 'Dayton'],
+  'NJ': ['Newark', 'Jersey City', 'Paterson', 'Elizabeth', 'Trenton', 'Camden'],
+  'VA': ['Virginia Beach', 'Norfolk', 'Chesapeake', 'Richmond', 'Arlington', 'Alexandria'],
+  'TN': ['Nashville', 'Memphis', 'Knoxville', 'Chattanooga', 'Clarksville'],
+  'IN': ['Indianapolis', 'Fort Wayne', 'Evansville', 'South Bend', 'Carmel'],
+  'MO': ['Kansas City', 'St. Louis', 'Springfield', 'Columbia', 'Independence'],
+  'MD': ['Baltimore', 'Frederick', 'Rockville', 'Gaithersburg', 'Annapolis'],
+  'WI': ['Milwaukee', 'Madison', 'Green Bay', 'Kenosha', 'Racine'],
+  'MN': ['Minneapolis', 'St. Paul', 'Rochester', 'Duluth', 'Bloomington']
 };
 
 // Expanded airport codes (30 major US airports)
@@ -196,8 +206,11 @@ async function seedDatabase() {
     const mongodb = mongoClient.db(MONGO_DB);
     console.log('✅ Connected to MongoDB\n');
 
-    // Hash password once for all test users
-    const hashedPassword = await bcrypt.hash('password123', 10);
+    // FIXED: Use pre-computed bcrypt hash for consistent credentials across all systems
+    // Password: password123 (bcrypt hash with 10 rounds)
+    // This ensures the same hash works on every machine without regeneration issues
+    const hashedPassword = '$2a$10$fOkLB2XD1F1SK2sb5V6S7eFsyKAHH2XwQFpbFLams/aXGksVZVgT2';
+    console.log('✅ Using fixed password hash: all users will have password "password123"');
 
     // ============================================
     // 1. SEED USERS (1000 users + 2 admin users)
@@ -240,7 +253,7 @@ async function seedDatabase() {
       1 // is_admin
     ]);
 
-    // Then add regular users
+    // Then add regular users with simple emails: user0@kayak.com, user1@kayak.com, etc.
     for (let i = 0; i < 1000; i++) {
       const state = states[Math.floor(Math.random() * states.length)];
       const cityList = cities[state] || ['Default City'];
@@ -252,7 +265,7 @@ async function seedDatabase() {
         generateSSN(),
         firstName,
         lastName,
-        generateEmail(firstName, lastName, i),
+        `user${i}@kayak.com`,  // Simple, predictable email format
         hashedPassword,
         generatePhone(),
         `${Math.floor(Math.random() * 9999) + 1} Main St`,
@@ -604,6 +617,18 @@ async function seedDatabase() {
     console.log(`  - ${airports.length} major airports covered`);
     console.log('  - Multiple hotels & cars per city');
     console.log('  - Better search coverage');
+    console.log('========================================');
+    console.log('\n🔐 LOGIN CREDENTIALS (use these to login):');
+    console.log('========================================');
+    console.log('ADMIN USER:');
+    console.log('  Email:    admin@kayak.com');
+    console.log('  Password: password123');
+    console.log('\nTEST ADMIN:');
+    console.log('  Email:    testadmin@kayak.com');
+    console.log('  Password: password123');
+    console.log('\nREGULAR USERS:');
+    console.log('  Email:    user0@kayak.com (or user1, user2, ... user999)');
+    console.log('  Password: password123');
     console.log('========================================\n');
     console.log('✅ Ready to start services!');
     console.log('Run: make start\n');
@@ -638,3 +663,5 @@ if (require.main === module) {
 }
 
 module.exports = { seedDatabase };
+
+

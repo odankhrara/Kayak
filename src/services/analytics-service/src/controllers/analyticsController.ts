@@ -4,8 +4,8 @@
  */
 
 import { Router, Request, Response } from 'express'
-import { requireAdmin } from '../../../common/src/middleware/auth'
-import { redisCache } from '../../../common/src/cache/redisCache'
+import { requireAdmin } from '@kayak/common/src/middleware/auth'
+import { redisCache } from '@kayak/common/src/cache/redisCache'
 
 const router = Router()
 

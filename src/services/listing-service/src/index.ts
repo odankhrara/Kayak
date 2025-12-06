@@ -6,6 +6,8 @@ import flightController from './controllers/flightController'
 import hotelController from './controllers/hotelController'
 import carController from './controllers/carController'
 import favoriteController from './controllers/favoriteController'
+import reviewController from './controllers/reviewController'
+import bidController from './controllers/bidController'
 
 dotenv.config()
 
@@ -24,7 +26,10 @@ app.get('/', (req, res) => {
       health: '/health',
       flights: '/api/listings/flights',
       hotels: '/api/listings/hotels',
-      cars: '/api/listings/cars'
+      cars: '/api/listings/cars',
+      favorites: '/api/listings/favorites',
+      reviews: '/api/listings/reviews',
+      bids: '/api/listings/bids'
     }
   })
 })
@@ -37,6 +42,8 @@ app.use('/api/listings/flights', flightController)
 app.use('/api/listings/hotels', hotelController)
 app.use('/api/listings/cars', carController)
 app.use('/api/listings/favorites', favoriteController)
+app.use('/api/listings/reviews', reviewController)
+app.use('/api/listings/bids', bidController)
 
 app.use(errorHandler)
 

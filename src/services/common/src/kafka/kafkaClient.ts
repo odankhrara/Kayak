@@ -1,7 +1,9 @@
 import { Kafka, Producer, Consumer, KafkaConfig, ProducerRecord } from 'kafkajs'
 import { KafkaTopic } from './topics'
 
-const brokers = (process.env.KAFKA_BROKERS || 'kafka:9092,localhost:9092')
+// Use KAFKA_BROKERS env var, default to kafka:9092 for Docker
+// For local development outside Docker, set KAFKA_BROKERS=localhost:29092
+const brokers = (process.env.KAFKA_BROKERS || 'kafka:9092')
   .split(',')
   .map((b) => b.trim())
   .filter(Boolean)
@@ -33,6 +35,14 @@ export async function getProducer(): Promise<Producer> {
   }
 
   return producerInstance
+}
+
+/**
+ * Create a Kafka producer instance (synchronous, not connected)
+ * Use this when you want to manage connection lifecycle yourself
+ */
+export function createProducer(): Producer {
+  return kafka.producer()
 }
 
 /**

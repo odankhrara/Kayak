@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Car as CarIcon, Users } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Car as CarIcon, Users, Scale } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { carService } from '../services/car.service';
 import { Car } from '../types';
 import Button from '../components/common/Button';
@@ -10,10 +10,14 @@ import Card from '../components/common/Card';
 import Input from '../components/common/Input';
 import { SkeletonCard } from '../components/common/Loading';
 import Select from '../components/common/Select';
+import CarLocationAutocomplete from '../components/common/CarLocationAutocomplete';
 import { formatCurrency, calculateNights } from '../utils/formatters';
 import { CAR_TYPES, TRANSMISSION_TYPES } from '../utils/constants';
 import { toast } from 'react-toastify';
 import { useAuthStore } from '../store/authStore';
+import { trackSearch, trackBookingAttempt } from '../utils/clickTracking';
+import FavoriteButton from '../components/favorites/FavoriteButton';
+import { ComparisonBar, ComparisonItem } from '../components/comparison';
 
 const CarSearch = () => {
   const [searchParams] = useSearchParams();
@@ -24,13 +28,24 @@ const CarSearch = () => {
   const [transmission, setTransmission] = useState('');
   const [pickupDate, setPickupDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
+  
+  // Location state for autocomplete
+  const [selectedLocation, setSelectedLocation] = useState('');
+  
+  // Comparison state
+  const [comparisonItems, setComparisonItems] = useState<ComparisonItem[]>([]);
 
   const filters = {
     location: searchParams.get('location') || '',
     pickupDate: searchParams.get('pickupDate') || '',
     returnDate: searchParams.get('returnDate') || '',
-    carType: carTypeFilter || searchParams.get('carType') || undefined,
-    transmission: transmission as any,
+    carType: (carTypeFilter || searchParams.get('carType') || undefined) as 'sedan' | 'suv' | 'compact' | 'luxury' | 'van' | 'truck' | undefined,
+    transmission: transmission as 'automatic' | 'manual' | undefined,
+    minPrice: minPrice ? parseFloat(minPrice) : undefined,
+    maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
     sortBy: 'price' as const,
     sortOrder: 'ASC' as const,
   };
@@ -41,11 +56,86 @@ const CarSearch = () => {
     enabled: !!filters.location,
   });
 
+  // Track search results when cars are loaded
+  useEffect(() => {
+    if (cars && filters.location) {
+      trackSearch({
+        type: 'car',
+        location: filters.location,
+        pickupDate: filters.pickupDate,
+        returnDate: filters.returnDate,
+        carType: filters.carType || 'any',
+      }, cars.length);
+    }
+  }, [cars]);
+
   const days = filters.pickupDate && filters.returnDate 
     ? calculateNights(filters.pickupDate, filters.returnDate)
     : 0;
 
+  // Extract unique car rental companies from search results
+  const uniqueCompanies = useMemo(() => {
+    if (!cars) return [];
+    const companies = [...new Set(cars.map(c => c.companyName))].filter(Boolean).sort();
+    return companies;
+  }, [cars]);
+
+  // Filter cars by company
+  const filteredCars = useMemo(() => {
+    if (!cars || !companyFilter) return cars;
+    return cars.filter(c => c.companyName === companyFilter);
+  }, [cars, companyFilter]);
+
+  // Comparison handlers
+  const isInComparison = (carId: string) => {
+    return comparisonItems.some(item => item.id === carId);
+  };
+
+  const toggleComparison = (car: Car) => {
+    const carIdStr = car.carId?.toString() || '';
+    if (isInComparison(carIdStr)) {
+      setComparisonItems(items => items.filter(item => item.id !== carIdStr));
+    } else {
+      if (comparisonItems.length >= 3) {
+        toast.warning('You can compare up to 3 cars at a time');
+        return;
+      }
+      const newItem: ComparisonItem = {
+        id: carIdStr,
+        type: 'car',
+        name: `${car.model} (${car.year})`,
+        provider: car.companyName,
+        price: car.dailyRentalPrice * days,
+        rating: car.carRating,
+        details: {
+          carType: car.carType,
+          transmission: car.transmissionType || 'Automatic',
+          seats: car.seats,
+          dailyRate: car.dailyRentalPrice,
+          available: car.available ? 'Yes' : 'No',
+        }
+      };
+      setComparisonItems(items => [...items, newItem]);
+      toast.success(`Added ${car.model} to comparison`);
+    }
+  };
+
+  const removeFromComparison = (id: string) => {
+    setComparisonItems(items => items.filter(item => item.id !== id));
+  };
+
+  const clearComparison = () => {
+    setComparisonItems([]);
+  };
+
   const handleBookCar = (car: Car) => {
+    // Track booking attempt
+    trackBookingAttempt(
+      car.carId?.toString() || 'unknown',
+      'car',
+      (car.dailyRentalPrice || 0) * days
+    );
+
     if (!isAuthenticated) {
       toast.error('Please login to book this car');
       navigate('/login', {
@@ -93,6 +183,12 @@ const CarSearch = () => {
               const pickupValue = formData.get('pickupDate') as string;
               const returnValue = formData.get('returnDate') as string;
               
+              // Validate location is selected
+              if (!selectedLocation) {
+                toast.error('Please select a location from the dropdown');
+                return;
+              }
+              
               // Validate return date is after pickup date
               if (pickupValue && returnValue) {
                 const pickupDateObj = new Date(pickupValue);
@@ -105,7 +201,7 @@ const CarSearch = () => {
               }
               
               const params = new URLSearchParams({
-                location: formData.get('location') as string,
+                location: selectedLocation,
                 pickupDate: pickupValue,
                 returnDate: returnValue,
               });
@@ -113,11 +209,11 @@ const CarSearch = () => {
             }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="md:col-span-2">
-                  <Input
-                    type="text"
-                    name="location"
+                  <CarLocationAutocomplete
+                    value={selectedLocation}
+                    onChange={(location) => setSelectedLocation(location)}
+                    placeholder="Search locations with rental cars..."
                     label="Pick-up Location"
-                    placeholder="e.g., Chicago, Miami, New York"
                     required
                   />
                 </div>
@@ -205,12 +301,57 @@ const CarSearch = () => {
               options={[{ value: '', label: 'Any' }, ...TRANSMISSION_TYPES]}
             />
 
+            <div>
+              <label className="block text-sm font-medium mb-2">Daily Price Range</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="number"
+                  placeholder="Min $"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  placeholder="Max $"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Car Rental Company Filter */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                🚗 Rental Company
+              </label>
+              <select
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Companies</option>
+                {uniqueCompanies.map((company) => (
+                  <option key={company} value={company}>
+                    {company}
+                  </option>
+                ))}
+              </select>
+              {uniqueCompanies.length > 0 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  {uniqueCompanies.length} compan{uniqueCompanies.length !== 1 ? 'ies' : 'y'} available
+                </p>
+              )}
+            </div>
+
             <Button
               variant="outline"
               fullWidth
               onClick={() => {
                 setCarTypeFilter('');
                 setTransmission('');
+                setMinPrice('');
+                setMaxPrice('');
+                setCompanyFilter('');
               }}
             >
               Clear Filters
@@ -221,7 +362,7 @@ const CarSearch = () => {
         <div className="lg:col-span-3 space-y-4">
           {isLoading && <><SkeletonCard /><SkeletonCard /></>}
 
-          {cars?.map((car, index) => (
+          {filteredCars?.map((car, index) => (
             <motion.div
               key={car.carId}
               initial={{ opacity: 0, y: 20 }}
@@ -230,13 +371,45 @@ const CarSearch = () => {
             >
               <Card interactive>
                 <div className="flex flex-col md:flex-row gap-6">
-                  <div className="w-full md:w-48 h-48 bg-gradient-to-br from-teal-500 to-blue-500 rounded-xl flex items-center justify-center">
+                  <div 
+                    className="w-full md:w-48 h-48 bg-gradient-to-br from-teal-500 to-blue-500 rounded-xl flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => navigate(`/cars/${car.carId}?pickupDate=${filters.pickupDate}&returnDate=${filters.returnDate}`)}
+                  >
                     <CarIcon className="w-16 h-16 text-white" />
                   </div>
 
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-2">{car.model} ({car.year})</h3>
-                    <p className="text-slate-600 dark:text-slate-400 mb-3">{car.companyName}</p>
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 
+                          className="text-xl font-bold cursor-pointer hover:text-blue-600 transition-colors"
+                          onClick={() => navigate(`/cars/${car.carId}?pickupDate=${filters.pickupDate}&returnDate=${filters.returnDate}`)}
+                        >
+                          {car.model} ({car.year})
+                        </h3>
+                        <p 
+                          className="text-slate-600 dark:text-slate-400 cursor-pointer hover:text-blue-500 transition-colors"
+                          onClick={() => navigate(`/cars/${car.carId}?pickupDate=${filters.pickupDate}&returnDate=${filters.returnDate}`)}
+                        >
+                          {car.companyName}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Compare Button */}
+                        <button
+                          onClick={() => toggleComparison(car)}
+                          className={`p-2 rounded-lg transition-all ${
+                            isInComparison(car.carId?.toString() || '')
+                              ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30'
+                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700'
+                          }`}
+                          title={isInComparison(car.carId?.toString() || '') ? 'Remove from comparison' : 'Add to comparison'}
+                        >
+                          <Scale className="w-4 h-4" />
+                        </button>
+                        <FavoriteButton itemType="car" itemId={car.carId} />
+                      </div>
+                    </div>
 
                     <div className="flex flex-wrap gap-3 mb-4">
                       <span className="badge-primary capitalize">{car.carType}</span>
@@ -269,6 +442,18 @@ const CarSearch = () => {
           ))}
         </div>
       </div>
+
+      {/* Comparison Bar */}
+      <AnimatePresence>
+        {comparisonItems.length > 0 && (
+          <ComparisonBar
+            items={comparisonItems}
+            onRemove={removeFromComparison}
+            onClear={clearComparison}
+            maxItems={3}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

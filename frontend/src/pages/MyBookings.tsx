@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar, X } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -11,10 +12,26 @@ import Loading from '../components/common/Loading';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { BOOKING_STATUSES } from '../utils/constants';
 
+type FilterType = 'all' | 'past' | 'current' | 'future';
+
 const MyBookings = () => {
   const { user } = useAuthStore();
-  const [filter, setFilter] = useState<'all' | 'past' | 'current' | 'future'>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  
+  // Get filter from URL or default to 'all'
+  const urlFilter = searchParams.get('filter') as FilterType;
+  const filter: FilterType = ['all', 'past', 'current', 'future'].includes(urlFilter) ? urlFilter : 'all';
+  
+  // Update URL when filter changes
+  const setFilter = (newFilter: FilterType) => {
+    if (newFilter === 'all') {
+      searchParams.delete('filter');
+    } else {
+      searchParams.set('filter', newFilter);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
 
   const { data: bookings, isLoading, refetch } = useQuery({
     queryKey: ['my-bookings', user?.userId, filter !== 'all' ? filter : undefined],
@@ -125,6 +142,23 @@ const MyBookings = () => {
                             </p>
                           </div>
                         </div>
+                        
+                        {/* Room breakdown for hotel bookings */}
+                        {booking.bookingType === 'hotel' && (booking as any).roomSelections && (booking as any).roomSelections.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                            <p className="text-sm text-slate-500 mb-2">Room Details:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {(booking as any).roomSelections.map((room: any, idx: number) => (
+                                <span 
+                                  key={idx}
+                                  className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm"
+                                >
+                                  {room.quantity}× {room.roomType} ({formatCurrency(room.pricePerNight)}/night)
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {canCancel && (

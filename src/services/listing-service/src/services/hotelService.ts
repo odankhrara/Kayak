@@ -2,8 +2,20 @@ import { HotelRepository } from '../repositories/hotelRepository'
 import { Hotel } from '../models/Hotel'
 import { redisCache } from '@kayak/common/src/cache/redisCache'
 
+// Cache version - increment this when query logic changes to invalidate old cache
+// This ensures old cached results don't interfere with new query behavior
+// v3: Fixed room filtering to respect guest capacity in displayed prices
+const CACHE_VERSION = 'v3'
+
 export class HotelService {
   private repository = new HotelRepository()
+
+  /**
+   * Get all unique city-state combinations for autocomplete
+   */
+  async getLocations(searchTerm?: string): Promise<{ city: string; state: string; hotelCount: number }[]> {
+    return this.repository.getLocations(searchTerm)
+  }
 
   /**
    * Validate date format and order
@@ -100,20 +112,26 @@ export class HotelService {
         throw new Error('Rating must be between 0 and 5')
       }
 
-      // Generate cache key from filters
-      const cacheKey = `hotels:search:${JSON.stringify(filters)}`
+      // Generate cache key from filters (versioned to invalidate on code changes)
+      const cacheKey = `hotels:search:${CACHE_VERSION}:${JSON.stringify(filters)}`
       
       // Try cache first
       const cachedHotels = await redisCache.get<any[]>(cacheKey)
       if (cachedHotels) {
+        console.log(`✅ Cache HIT: ${cacheKey}`)
         return cachedHotels
       }
 
+      console.log(`❌ Cache MISS: ${cacheKey}`)
+      
       // Cache miss - query database
       const hotels = await this.repository.search(filters)
 
-      // Store in cache (5 minutes TTL)
-      await redisCache.set(cacheKey, hotels, 300)
+      // Only cache successful results with data
+      if (hotels && hotels.length > 0) {
+        await redisCache.set(cacheKey, hotels, 300)
+        console.log(`💾 Cached ${hotels.length} hotels (TTL: 300s)`)
+      }
 
       return hotels
     } catch (error: any) {
@@ -129,8 +147,8 @@ export class HotelService {
       throw new Error('Hotel ID is required')
     }
 
-    // Try cache first
-    const cacheKey = `hotel:${hotelId}`
+    // Try cache first (versioned)
+    const cacheKey = `hotel:${CACHE_VERSION}:${hotelId}`
     const cachedHotel = await redisCache.get<any>(cacheKey)
     if (cachedHotel) {
       return cachedHotel
@@ -209,9 +227,9 @@ export class HotelService {
     // Update in database
     const updatedHotel = await this.repository.update(hotelId, updates)
 
-    // Invalidate caches
-    await redisCache.del(`hotel:${hotelId}`)
-    await redisCache.delPattern('hotels:search:*')
+    // Invalidate caches (versioned keys)
+    await redisCache.del(`hotel:${CACHE_VERSION}:${hotelId}`)
+    await redisCache.delPattern(`hotels:search:${CACHE_VERSION}:*`)
     console.log(`🔄 Cache invalidated for hotel ${hotelId}`)
 
     return updatedHotel
@@ -310,9 +328,9 @@ export class HotelService {
     // Delete from database
     await this.repository.delete(hotelId)
 
-    // Invalidate caches
-    await redisCache.del(`hotel:${hotelId}`)
-    await redisCache.delPattern('hotels:search:*')
+    // Invalidate caches (versioned keys)
+    await redisCache.del(`hotel:${CACHE_VERSION}:${hotelId}`)
+    await redisCache.delPattern(`hotels:search:${CACHE_VERSION}:*`)
     console.log(`🗑️  Cache invalidated for deleted hotel ${hotelId}`)
   }
 }

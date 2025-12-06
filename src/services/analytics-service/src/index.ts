@@ -29,13 +29,86 @@ app.get('/', (req, res) => {
         topProperties: '/api/admin/properties/top',
         clicksPerPage: '/api/admin/host/clicks-per-page',
         propertyClicks: '/api/admin/host/property-clicks'
+      },
+      providers: {
+        summary: '/api/admin/providers/summary',
+        airlines: '/api/admin/providers/airlines',
+        hotels: '/api/admin/providers/hotels',
+        cars: '/api/admin/providers/cars',
+        revenueTimeline: '/api/admin/providers/revenue-timeline',
+        list: '/api/admin/providers/list'
       }
     }
   })
 })
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'analytics-service' })
+// Enhanced health check that verifies all dependencies
+app.get('/health', async (req, res) => {
+  const health: {
+    status: 'ok' | 'degraded' | 'unhealthy';
+    service: string;
+    timestamp: string;
+    dependencies: {
+      mysql: { status: string; latency?: number };
+      mongodb: { status: string; latency?: number };
+      redis: { status: string; latency?: number };
+      kafka: { status: string };
+    };
+  } = {
+    status: 'ok',
+    service: 'analytics-service',
+    timestamp: new Date().toISOString(),
+    dependencies: {
+      mysql: { status: 'unknown' },
+      mongodb: { status: 'unknown' },
+      redis: { status: 'unknown' },
+      kafka: { status: clickEventsConsumer || userTrackingConsumer ? 'connected' : 'disconnected' }
+    }
+  };
+
+  // Check MySQL
+  try {
+    const mysqlStart = Date.now();
+    const mysqlPool = (await import('@kayak/common/src/db/mysqlPool')).default;
+    await mysqlPool.query('SELECT 1');
+    health.dependencies.mysql = { status: 'healthy', latency: Date.now() - mysqlStart };
+  } catch (err) {
+    health.dependencies.mysql = { status: 'unhealthy' };
+    health.status = 'degraded';
+  }
+
+  // Check MongoDB
+  try {
+    const mongoStart = Date.now();
+    const { getMongoDb } = await import('@kayak/common/src/db/mongoClient');
+    const db = await getMongoDb();
+    await db.command({ ping: 1 });
+    health.dependencies.mongodb = { status: 'healthy', latency: Date.now() - mongoStart };
+  } catch (err) {
+    health.dependencies.mongodb = { status: 'unhealthy' };
+    health.status = 'degraded';
+  }
+
+  // Check Redis
+  try {
+    const redisStart = Date.now();
+    const { redisCache } = await import('@kayak/common/src/cache/redisCache');
+    await redisCache.get('health-check-test');
+    health.dependencies.redis = { status: 'healthy', latency: Date.now() - redisStart };
+  } catch (err) {
+    health.dependencies.redis = { status: 'unhealthy' };
+    health.status = 'degraded';
+  }
+
+  // Kafka status from consumer state
+  if (!clickEventsConsumer && !userTrackingConsumer) {
+    health.dependencies.kafka = { status: 'disconnected' };
+    health.status = 'degraded';
+  }
+
+  // Return appropriate status code
+  const statusCode = health.status === 'ok' ? 200 : health.status === 'degraded' ? 200 : 503;
+  res.status(statusCode).json(health);
 })
 
 // Real-time analytics from Redis (updated by Kafka consumer)
@@ -97,10 +170,10 @@ app.get('/api/admin/properties/top', requireAdmin, async (req, res) => {
 // Host/Provider Analysis Endpoints
 app.get('/api/admin/host/clicks-per-page', requireAdmin, async (req, res) => {
   try {
-    const { startDate, endDate } = req.query
+    const { startDate, endDate, propertyType } = req.query
     const start = startDate ? new Date(startDate as string) : undefined
     const end = endDate ? new Date(endDate as string) : undefined
-    const data = await analyticsService.getClicksPerPage(start, end)
+    const data = await analyticsService.getClicksPerPage(start, end, propertyType as 'hotel' | 'flight' | 'car' | undefined)
     res.json(data)
   } catch (error: any) {
     res.status(500).json({ error: error.message })
@@ -159,6 +232,93 @@ app.get('/api/admin/host/bidding-trace', requireAdmin, async (req, res) => {
   try {
     const { propertyId } = req.query
     const data = await analyticsService.getBiddingTrace(propertyId as string | undefined)
+    res.json(data)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// ============================================
+// PROVIDER ANALYTICS ENDPOINTS (Phase 1)
+// ============================================
+
+// Get all providers summary
+app.get('/api/admin/providers/summary', requireAdmin, async (req, res) => {
+  try {
+    const { year } = req.query
+    const data = await analyticsService.getProvidersSummary(
+      year ? parseInt(year as string) : undefined
+    )
+    res.json(data)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get top airlines by revenue
+app.get('/api/admin/providers/airlines', requireAdmin, async (req, res) => {
+  try {
+    const { year, limit } = req.query
+    const data = await analyticsService.getTopAirlinesByRevenue(
+      year ? parseInt(year as string) : undefined,
+      limit ? parseInt(limit as string) : 10
+    )
+    res.json(data)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get top hotels by bookings
+app.get('/api/admin/providers/hotels', requireAdmin, async (req, res) => {
+  try {
+    const { year, limit } = req.query
+    const data = await analyticsService.getTopHotelsByBookings(
+      year ? parseInt(year as string) : undefined,
+      limit ? parseInt(limit as string) : 10
+    )
+    res.json(data)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get top car companies by rentals
+app.get('/api/admin/providers/cars', requireAdmin, async (req, res) => {
+  try {
+    const { year, limit } = req.query
+    const data = await analyticsService.getTopCarCompaniesByRentals(
+      year ? parseInt(year as string) : undefined,
+      limit ? parseInt(limit as string) : 10
+    )
+    res.json(data)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get provider revenue over time (monthly)
+app.get('/api/admin/providers/revenue-timeline', requireAdmin, async (req, res) => {
+  try {
+    const { type, provider, year } = req.query
+    if (!type || !['airline', 'hotel', 'car'].includes(type as string)) {
+      return res.status(400).json({ error: 'Invalid provider type. Use: airline, hotel, or car' })
+    }
+    const data = await analyticsService.getProviderRevenueOverTime(
+      type as 'airline' | 'hotel' | 'car',
+      provider as string | undefined,
+      year ? parseInt(year as string) : undefined
+    )
+    res.json(data)
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get list of all providers
+app.get('/api/admin/providers/list', requireAdmin, async (req, res) => {
+  try {
+    const data = await analyticsService.getProvidersList()
     res.json(data)
   } catch (error: any) {
     res.status(500).json({ error: error.message })

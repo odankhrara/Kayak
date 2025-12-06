@@ -21,7 +21,7 @@ const BookingCheckout = () => {
   const { user, isAuthenticated } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
 
-  const { bookingType, entity, quantity, checkInDate, checkOutDate } = location.state || {};
+  const { bookingType, entity, quantity, checkInDate, checkOutDate, roomSelections, totalPrice: preCalculatedPrice } = location.state || {};
 
   const {
     register,
@@ -52,13 +52,15 @@ const BookingCheckout = () => {
   // Calculate price
   const calculateTotal = () => {
     let basePrice = 0;
-    if (bookingType === 'flight') {
+    
+    // If pre-calculated price from multi-room selection, use it
+    if (preCalculatedPrice && roomSelections && roomSelections.length > 0) {
+      basePrice = preCalculatedPrice;
+    } else if (bookingType === 'flight') {
       basePrice = (entity.pricePerTicket || entity.ticketPrice || 0) * quantity;
     } else if (bookingType === 'hotel') {
       const nights = calculateNights(checkInDate, checkOutDate);
-      // Try rooms array first, then fallback to direct pricePerNight
-      const pricePerNight = entity.rooms?.[0]?.pricePerNight || entity.pricePerNight || 0;
-      basePrice = pricePerNight * nights * quantity;
+      basePrice = (entity.rooms?.[0]?.pricePerNight || 0) * nights * quantity;
     } else if (bookingType === 'car') {
       const days = calculateNights(checkInDate, checkOutDate);
       basePrice = entity.dailyRentalPrice * days;
@@ -68,14 +70,18 @@ const BookingCheckout = () => {
   };
 
   const { subtotal, tax, total } = calculateTotal();
+  
+  // Calculate nights for display
+  const nights = calculateNights(checkInDate, checkOutDate);
 
   const onSubmit = async (data: any) => {
     setIsLoading(true);
     try {
-      // For hotels, entityId needs to be "hotelId:roomType"
+      // For hotels, entityId is just the hotelId (room selections are sent separately)
       let entityId = entity.flightId || entity.carId || entity.hotelId;
-      if (bookingType === 'hotel' && entity.hotelId && entity.rooms && entity.rooms.length > 0) {
-        // Use the first available room type
+      
+      // For legacy single-room bookings without roomSelections
+      if (bookingType === 'hotel' && entity.hotelId && !roomSelections && entity.rooms && entity.rooms.length > 0) {
         const roomType = entity.rooms[0].roomType || 'single';
         entityId = `${entity.hotelId}:${roomType}`;
       }
@@ -83,7 +89,7 @@ const BookingCheckout = () => {
       const bookingData: CreateBookingData = {
         bookingType,
         entityId: entityId,
-        quantity,
+        quantity: roomSelections ? roomSelections.reduce((sum: number, r: any) => sum + r.quantity, 0) : quantity,
         checkInDate,
         checkOutDate,
         totalAmount: total,
@@ -94,6 +100,8 @@ const BookingCheckout = () => {
           expiryDate: data.expiryDate,
           paypalEmail: data.paypalEmail,
         },
+        // Include room selections for multi-room hotel bookings
+        roomSelections: roomSelections,
       };
 
       const result = await bookingService.create(bookingData);
@@ -152,9 +160,27 @@ const BookingCheckout = () => {
                       <p className="text-sm text-slate-500">Location</p>
                       <p className="font-semibold">{entity.city}, {entity.state}</p>
                     </div>
+                    {roomSelections && roomSelections.length > 0 ? (
+                      <div>
+                        <p className="text-sm text-slate-500 mb-2">Room Selection</p>
+                        <div className="space-y-1">
+                          {roomSelections.map((room: any, idx: number) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span className="capitalize">{room.quantity}× {room.roomType}</span>
+                              <span>{formatCurrency(room.pricePerNight * room.quantity * nights)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-slate-500">Rooms</p>
+                        <p className="font-semibold">{quantity}</p>
+                      </div>
+                    )}
                     <div>
-                      <p className="text-sm text-slate-500">Rooms</p>
-                      <p className="font-semibold">{quantity}</p>
+                      <p className="text-sm text-slate-500">Duration</p>
+                      <p className="font-semibold">{nights} night{nights > 1 ? 's' : ''}</p>
                     </div>
                   </>
                 )}

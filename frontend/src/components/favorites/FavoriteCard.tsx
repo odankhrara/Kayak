@@ -34,7 +34,7 @@ const FavoriteCard = ({ favorite }: FavoriteCardProps) => {
   const handleSaveNotes = async () => {
     if (!user) return;
     try {
-      await updateNotes(favorite.favorite_id, user.user_id, notes);
+      await updateNotes(favorite.favorite_id, user.userId, notes);
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving notes:', error);
@@ -45,7 +45,7 @@ const FavoriteCard = ({ favorite }: FavoriteCardProps) => {
     if (!user) return;
     if (window.confirm('Are you sure you want to remove this from your favorites?')) {
       try {
-        await removeFavorite(favorite.favorite_id, user.user_id);
+        await removeFavorite(favorite.favorite_id, user.userId);
       } catch (error) {
         console.error('Error deleting favorite:', error);
       }
