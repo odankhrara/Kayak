@@ -11,7 +11,7 @@ import { UserTrackingConsumer } from './consumers/userTrackingConsumer'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 8004
+const PORT = process.env.PORT || '8004'
 
 app.use(cors())
 app.use(express.json())
@@ -327,7 +327,7 @@ app.get('/api/admin/providers/list', requireAdmin, async (req, res) => {
 
 app.use(errorHandler)
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(parseInt(PORT, 10), '0.0.0.0', () => {
   console.log(`📊 Analytics Service running on port ${PORT}`)
   console.log(`✅ Real-time analytics API: http://localhost:${PORT}/api/analytics/today`)
   

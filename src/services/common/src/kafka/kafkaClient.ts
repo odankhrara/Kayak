@@ -1,9 +1,10 @@
 import { Kafka, Producer, Consumer, KafkaConfig, ProducerRecord } from 'kafkajs'
 import { KafkaTopic } from './topics'
 
+console.log(process.env.KAFKA_BROKERS)
 // Use KAFKA_BROKERS env var, default to kafka:9092 for Docker
 // For local development outside Docker, set KAFKA_BROKERS=localhost:29092
-const brokers = (process.env.KAFKA_BROKERS || 'kafka:9092')
+const brokers = (process.env.KAFKA_BROKERS || 'localhost:9092')
   .split(',')
   .map((b) => b.trim())
   .filter(Boolean)

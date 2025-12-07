@@ -33,32 +33,34 @@ export class UserTrackingConsumer {
   }
 
   private async consume() {
-    await this.consumer.run({
-      eachMessage: async ({ topic, partition, message }) => {
-        try {
-          if (!message.value) return
-
-          const eventData = JSON.parse(message.value.toString())
-          
-          // Store in MongoDB logs collection
-          const db = await getMongoDb()
-          const logsCollection = db.collection('logs')
-
-          const logDocument = {
-            ...eventData,
-            timestamp: eventData.timestamp ? new Date(eventData.timestamp) : new Date(),
-            created_at: new Date()
+    if (this.consumer) {
+      await this.consumer.run({
+        eachMessage: async ({ topic, partition, message }) => {
+          try {
+            if (!message.value) return
+  
+            const eventData = JSON.parse(message.value.toString())
+            
+            // Store in MongoDB logs collection
+            const db = await getMongoDb()
+            const logsCollection = db.collection('logs')
+  
+            const logDocument = {
+              ...eventData,
+              timestamp: eventData.timestamp ? new Date(eventData.timestamp) : new Date(),
+              created_at: new Date()
+            }
+  
+            await logsCollection.insertOne(logDocument)
+  
+            const logType = eventData.log_type || 'unknown'
+            console.log(`${logType} event stored: ${eventData.user_id || eventData.session_id || 'anonymous'}`)
+          } catch (error) {
+            console.error('Error processing user tracking event:', error)
           }
-
-          await logsCollection.insertOne(logDocument)
-
-          const logType = eventData.log_type || 'unknown'
-          console.log(`${logType} event stored: ${eventData.user_id || eventData.session_id || 'anonymous'}`)
-        } catch (error) {
-          console.error('Error processing user tracking event:', error)
         }
-      }
-    })
+      })
+    }
   }
 
   async stop() {
