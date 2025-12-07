@@ -7,8 +7,6 @@ from pathlib import Path
 # Add paths
 sys.path.insert(0, str(Path(__file__).parent.parent / "ai-recommendation"))
 
-import sqlite3
-
 # Try to import mysql connector
 try:
     import mysql.connector
@@ -26,8 +24,8 @@ MYSQL_CONFIG = {
     'database': os.getenv('MYSQL_DATABASE', 'kayak')
 }
 
-AI_DB_PATH = Path(__file__).parent.parent / "ai-recommendation" / "ai_recommendations.db"
-CSV_INDEX_PATH = Path(__file__).parent.parent / "ai-recommendation" / "csv_index.db"
+# CSV Index database name (MySQL)
+CSV_INDEX_DB_NAME = os.getenv('CSV_INDEX_DB_NAME', f"{MYSQL_CONFIG['database']}_csv_index")
 
 def check_mysql_database():
     """Check MySQL database (main booking database)"""
@@ -86,31 +84,52 @@ def check_mysql_database():
         return {'connected': False}
 
 def check_ai_database():
-    """Check AI Service database (SQLite)"""
-    print("📊 Checking AI Service Database (SQLite)")
+    """Check AI Service database (MySQL)"""
+    print("📊 Checking AI Service Database (MySQL)")
     print("=" * 60)
     
-    if not AI_DB_PATH.exists():
-        print(f"❌ AI Database not found: {AI_DB_PATH}")
+    if not MYSQL_AVAILABLE:
+        print("⚠️  mysql-connector-python not installed")
+        print("   Install with: pip install mysql-connector-python")
         print()
-        return {'exists': False}
+        return {'exists': False, 'error': 'module_not_installed'}
     
     try:
-        conn = sqlite3.connect(str(AI_DB_PATH))
+        # Check if flight_deals and hotel_deals tables exist in MySQL
+        conn = mysql.connector.connect(**MYSQL_CONFIG)
         cursor = conn.cursor()
         
-        # Check flight_deals
-        cursor.execute("SELECT COUNT(*) FROM flight_deals WHERE is_active = 1")
-        flight_deals = cursor.fetchone()[0]
+        # Check if tables exist
+        cursor.execute("SHOW TABLES LIKE 'flight_deals'")
+        has_flight_deals = cursor.fetchone() is not None
         
-        # Check hotel_deals
-        cursor.execute("SELECT COUNT(*) FROM hotel_deals WHERE is_active = 1")
-        hotel_deals = cursor.fetchone()[0]
+        cursor.execute("SHOW TABLES LIKE 'hotel_deals'")
+        has_hotel_deals = cursor.fetchone() is not None
+        
+        if not has_flight_deals and not has_hotel_deals:
+            print(f"❌ AI Database tables not found in {MYSQL_CONFIG['database']}")
+            print("   Tables 'flight_deals' and 'hotel_deals' do not exist")
+            print()
+            cursor.close()
+            conn.close()
+            return {'exists': False}
+        
+        # Check flight_deals count
+        flight_deals = 0
+        if has_flight_deals:
+            cursor.execute("SELECT COUNT(*) FROM flight_deals WHERE is_active = 1")
+            flight_deals = cursor.fetchone()[0]
+        
+        # Check hotel_deals count
+        hotel_deals = 0
+        if has_hotel_deals:
+            cursor.execute("SELECT COUNT(*) FROM hotel_deals WHERE is_active = 1")
+            hotel_deals = cursor.fetchone()[0]
         
         cursor.close()
         conn.close()
         
-        print(f"✅ AI Database: Found")
+        print(f"✅ AI Database: Found in MySQL ({MYSQL_CONFIG['database']})")
         print(f"   Flight Deals: {flight_deals}")
         print(f"   Hotel Deals: {hotel_deals}")
         print()
@@ -121,44 +140,72 @@ def check_ai_database():
             'hotel_deals': hotel_deals
         }
         
-    except Exception as e:
+    except Error as e:
         print(f"❌ Error reading AI database: {e}")
+        print(f"   Host: {MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}")
+        print(f"   Database: {MYSQL_CONFIG['database']}")
         print()
         return {'exists': False}
 
 def check_csv_index():
-    """Check CSV index database"""
-    print("📊 Checking CSV Index Database")
+    """Check CSV index database (MySQL)"""
+    print("📊 Checking CSV Index Database (MySQL)")
     print("=" * 60)
     
-    if not CSV_INDEX_PATH.exists():
-        print(f"❌ CSV Index not found: {CSV_INDEX_PATH}")
-        print("   Run: cd ai-recommendation && python scripts/index_all_datasets.py")
+    if not MYSQL_AVAILABLE:
+        print("⚠️  mysql-connector-python not installed")
+        print("   Install with: pip install mysql-connector-python")
         print()
-        return {'exists': False}
+        return {'exists': False, 'error': 'module_not_installed'}
     
     try:
-        conn = sqlite3.connect(str(CSV_INDEX_PATH))
+        # Connect to CSV index database
+        csv_config = MYSQL_CONFIG.copy()
+        csv_config['database'] = CSV_INDEX_DB_NAME
+        
+        conn = mysql.connector.connect(**csv_config)
         cursor = conn.cursor()
         
+        # Check if database exists and has tables
+        cursor.execute("SHOW TABLES LIKE 'flights'")
+        has_flights = cursor.fetchone() is not None
+        
+        cursor.execute("SHOW TABLES LIKE 'hotels'")
+        has_hotels = cursor.fetchone() is not None
+        
+        cursor.execute("SHOW TABLES LIKE 'airports'")
+        has_airports = cursor.fetchone() is not None
+        
+        if not has_flights and not has_hotels and not has_airports:
+            print(f"❌ CSV Index database not found: {CSV_INDEX_DB_NAME}")
+            print("   Run: cd ai-recommendation && python scripts/index_all_datasets.py")
+            print()
+            cursor.close()
+            conn.close()
+            return {'exists': False}
+        
         # Check indexed flights
-        cursor.execute("SELECT COUNT(*) FROM flights")
-        indexed_flights = cursor.fetchone()[0]
+        indexed_flights = 0
+        if has_flights:
+            cursor.execute("SELECT COUNT(*) FROM flights")
+            indexed_flights = cursor.fetchone()[0]
         
         # Check indexed hotels
-        cursor.execute("SELECT COUNT(*) FROM hotels")
-        indexed_hotels = cursor.fetchone()[0]
+        indexed_hotels = 0
+        if has_hotels:
+            cursor.execute("SELECT COUNT(*) FROM hotels")
+            indexed_hotels = cursor.fetchone()[0]
         
         # Check indexed airports
-        cursor.execute("SELECT COUNT(*) FROM airports")
-        indexed_airports = cursor.fetchone()[0]
+        indexed_airports = 0
+        if has_airports:
+            cursor.execute("SELECT COUNT(*) FROM airports")
+            indexed_airports = cursor.fetchone()[0]
         
         cursor.close()
         conn.close()
         
-        file_size = CSV_INDEX_PATH.stat().st_size / (1024 * 1024)  # MB
-        
-        print(f"✅ CSV Index: Found ({file_size:.1f} MB)")
+        print(f"✅ CSV Index: Found in MySQL ({CSV_INDEX_DB_NAME})")
         print(f"   Indexed Flights: {indexed_flights}")
         print(f"   Indexed Hotels: {indexed_hotels}")
         print(f"   Indexed Airports: {indexed_airports}")
@@ -171,8 +218,14 @@ def check_csv_index():
             'airports': indexed_airports
         }
         
-    except Exception as e:
-        print(f"❌ Error reading CSV index: {e}")
+    except Error as e:
+        if "Unknown database" in str(e):
+            print(f"❌ CSV Index database not found: {CSV_INDEX_DB_NAME}")
+            print("   Run: cd ai-recommendation && python scripts/index_all_datasets.py")
+        else:
+            print(f"❌ Error reading CSV index: {e}")
+            print(f"   Host: {MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}")
+            print(f"   Database: {CSV_INDEX_DB_NAME}")
         print()
         return {'exists': False}
 

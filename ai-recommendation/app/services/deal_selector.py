@@ -87,9 +87,66 @@ class DealSelector:
         if len(results) < limit:
             try:
                 from sqlalchemy import text
-                # Query main flights table directly
+                # Convert city names to airport codes before querying MySQL
+                # Comprehensive mapping including all major cities and their primary airports
+                city_to_airport = {
+                    # US Cities
+                    'fairbanks': 'FAI', 'anchorage': 'ANC', 'seattle': 'SEA', 'portland': 'PDX',
+                    'san francisco': 'SFO', 'sf': 'SFO', 'oakland': 'OAK', 'sacramento': 'SMF',
+                    'los angeles': 'LAX', 'la': 'LAX', 'ontario': 'ONT', 'san diego': 'SAN',
+                    'new york': 'JFK', 'nyc': 'JFK', 'newark': 'EWR', 'laguardia': 'LGA',
+                    'chicago': 'ORD', 'miami': 'MIA', 'fort lauderdale': 'FLL', 'boston': 'BOS',
+                    'atlanta': 'ATL', 'dallas': 'DFW', 'denver': 'DEN', 'las vegas': 'LAS',
+                    'orlando': 'MCO', 'phoenix': 'PHX', 'philadelphia': 'PHL', 'detroit': 'DTW',
+                    'minneapolis': 'MSP', 'st paul': 'MSP', 'houston': 'IAH', 'washington': 'IAD',
+                    'dc': 'IAD', 'baltimore': 'BWI', 'charlotte': 'CLT', 'salt lake city': 'SLC',
+                    'san jose': 'SJC', 'austin': 'AUS', 'nashville': 'BNA', 'indianapolis': 'IND',
+                    'columbus': 'CMH', 'cleveland': 'CLE', 'milwaukee': 'MKE', 'kansas city': 'MCI',
+                    'tampa': 'TPA', 'raleigh': 'RDU', 'richmond': 'RIC', 'buffalo': 'BUF',
+                    'rochester': 'ROC', 'syracuse': 'SYR', 'providence': 'PVD', 'portland maine': 'PWM',
+                    'honolulu': 'HNL', 'kona': 'KOA', 'maui': 'OGG', 'kauai': 'LIH',
+                    # International Cities
+                    'tokyo': 'NRT', 'delhi': 'DEL', 'new delhi': 'DEL', 'mumbai': 'BOM',
+                    'bombay': 'BOM', 'paris': 'CDG', 'london': 'LHR', 'bangalore': 'BLR',
+                    'chennai': 'MAA', 'hyderabad': 'HYD', 'kolkata': 'CCU', 'calcutta': 'CCU',
+                    'san juan': 'SJU', 'puerto rico': 'SJU'
+                }
+                
+                # Convert origin to airport code
                 origin_code = origin.upper() if origin else None
+                if origin_code:
+                    origin_lower = origin.lower() if origin else None
+                    # Check if it's already a 3-letter airport code
+                    if len(origin_code) == 3 and origin_code.isalpha():
+                        # Already a code, use it as-is
+                        pass
+                    elif origin_lower and origin_lower in city_to_airport:
+                        # Direct city name match
+                        origin_code = city_to_airport[origin_lower]
+                    elif origin_lower:
+                        # Try partial match (e.g., "fairbanks" contains "fairbanks")
+                        for city, code in city_to_airport.items():
+                            if city in origin_lower or origin_lower in city:
+                                origin_code = code
+                                break
+                
+                # Convert destination to airport code
                 dest_code = destination.upper() if destination else None
+                if dest_code:
+                    dest_lower = destination.lower() if destination else None
+                    # Check if it's already a 3-letter airport code
+                    if len(dest_code) == 3 and dest_code.isalpha():
+                        # Already a code, use it as-is
+                        pass
+                    elif dest_lower and dest_lower in city_to_airport:
+                        # Direct city name match
+                        dest_code = city_to_airport[dest_lower]
+                    elif dest_lower:
+                        # Try partial match
+                        for city, code in city_to_airport.items():
+                            if city in dest_lower or dest_lower in city:
+                                dest_code = code
+                                break
                 
                 query = """
                     SELECT 

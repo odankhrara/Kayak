@@ -37,20 +37,29 @@ class NLUParser:
     Can use Groq (preferred) or Ollama for intelligent parsing if available, otherwise falls back to rule-based parsing.
     """
     
-    # Common airport codes (3-letter IATA codes)
-    # Will be enhanced with Global Airports dataset if available
+    # Airport codes (3-letter IATA codes) - All codes currently in the database
+    # Dynamically loaded from database to ensure all available airports are recognized
     AIRPORT_CODES = {
-        'sfo', 'lax', 'jfk', 'lga', 'ewr', 'ord', 'dfw', 'atl', 'den', 'sea',
-        'las', 'mco', 'phx', 'mia', 'iad', 'bwi', 'sju', 'bna', 'msy',
-        'bos', 'iad', 'dtw', 'msp', 'slt', 'clt', 'iah', 'mci', 'pdx', 'san',
-        'nrt', 'hnd', 'del', 'bom', 'cdg', 'lhr', 'lgw', 'blr', 'maa', 'hyd', 'ccu'
+        # US Domestic Airports (from flights database)
+        'abi', 'abr', 'anc', 'atl', 'aus', 'bdl', 'bfl', 'bji', 'bna', 'boi',
+        'bos', 'bqn', 'bro', 'buf', 'bwi', 'chs', 'cid', 'cle', 'clt', 'crp',
+        'dca', 'den', 'dfw', 'dtw', 'eug', 'ewr', 'fai', 'fat', 'fll', 'geg',
+        'gso', 'gsp', 'hib', 'hnl', 'iad', 'iag', 'iah', 'ida', 'ind', 'ito',
+        'jax', 'jfk', 'koa', 'lan', 'las', 'lax', 'lga', 'lih', 'maf', 'mci',
+        'mco', 'mfr', 'mia', 'mke', 'msn', 'msp', 'myr', 'oak', 'ogg', 'oma',
+        'ont', 'ord', 'pbg', 'pbi', 'pdx', 'phl', 'phx', 'pia', 'pit', 'pse',
+        'pvd', 'pwm', 'rdd', 'rdm', 'ric', 'rno', 'roc', 'rsw', 'sat', 'sba',
+        'sbn', 'sea', 'sfo', 'sgf', 'sju', 'slc', 'smf', 'smx', 'syr', 'tpa',
+        'tyr', 'vps', 'xna',
+        # International Airports
+        'bom', 'del', 'nrt', 'hnd', 'cdg', 'lhr', 'lgw', 'blr', 'maa', 'hyd', 'ccu'
     }
     
     # Common city names
     MAJOR_CITIES = {
         'tokyo', 'new york', 'nyc', 'los angeles', 'la', 'chicago', 'miami',
         'san francisco', 'sf', 'seattle', 'boston', 'washington', 'dc',
-        'paris', 'london', 'dubai', 'singapore', 'bangkok', 'sydney',
+        'fairbanks', 'paris', 'london', 'dubai', 'singapore', 'bangkok', 'sydney',
         'toronto', 'vancouver', 'mexico city', 'rio', 'buenos aires',
         'delhi', 'mumbai', 'bangalore', 'chennai', 'kolkata', 'hyderabad',
         'bombay'  # Mumbai is also known as Bombay
@@ -291,6 +300,37 @@ class NLUParser:
     def _extract_origin(self, text: str) -> Optional[str]:
         """Extract origin airport code or city"""
         text_lower = text.lower()
+        
+        # Handle "X to Y" pattern (without "from") - extract origin before "to"
+        if ' to ' in text_lower and ' from ' not in text_lower:
+            # Pattern: "FAI to SEA" or "Mumbai to Delhi"
+            to_parts = text_lower.split(' to ')
+            if len(to_parts) > 0:
+                before_to = to_parts[0].strip()
+                # Remove any leading words
+                before_to = re.sub(r'^(find|search|get|book|show|i want|i need|looking for|need)\s+', '', before_to, flags=re.IGNORECASE).strip()
+                # Remove any trailing words
+                for stop_word in [' for ', ' with ', ' budget', ' under', ' people', ' travelers', ' flights', ' flight']:
+                    if stop_word in before_to:
+                        before_to = before_to.split(stop_word)[0].strip()
+                
+                # Check if it's an airport code (3 uppercase letters)
+                before_to_upper = before_to.upper().strip()
+                if len(before_to_upper) == 3 and before_to_upper.isalpha():
+                    # Check if it's a known airport code
+                    if before_to_upper.lower() in self.AIRPORT_CODES:
+                        return before_to_upper
+                    # Even if not in our list, if it's 3 letters, treat as airport code
+                    return before_to_upper
+                
+                # Check if it's a known city
+                origin = self._extract_city_or_airport(before_to)
+                if origin:
+                    return origin
+                
+                # If it's a short word (likely airport code or city), return it
+                if len(before_to) <= 15 and not any(char.isdigit() for char in before_to):
+                    return before_to.upper() if len(before_to) == 3 else before_to.title()
         
         # Handle "from X to Y" pattern - extract origin after "from"
         if ' from ' in text_lower and ' to ' in text_lower:
@@ -697,6 +737,7 @@ class NLUParser:
             'miami': 'MIA',
             'seattle': 'SEA',
             'boston': 'BOS',
+            'fairbanks': 'FAI',
             'tokyo': 'NRT',
             'delhi': 'DEL',
             'mumbai': 'BOM',

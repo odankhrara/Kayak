@@ -39,16 +39,13 @@ def generate_car_id(company: str, num: int) -> str:
 def populate_flights_from_csv():
     """Populate flights table from CSV data"""
     try:
-        # Set correct path for CSV index
+        # Change to ai-recommendation directory for imports
         import os
-        csv_index_path = Path(__file__).parent.parent / "ai-recommendation" / "csv_index.db"
-        if csv_index_path.exists():
-            os.environ['CSV_INDEX_DB'] = str(csv_index_path)
-            # Change to ai-recommendation directory for imports
-            os.chdir(Path(__file__).parent.parent / "ai-recommendation")
+        os.chdir(Path(__file__).parent.parent / "ai-recommendation")
         
+        # CSVQueryService now uses MySQL by default (kayak_csv_index database)
         from app.services.csv_query_service import CSVQueryService
-        csv_service = CSVQueryService(index_db_path=str(csv_index_path))
+        csv_service = CSVQueryService()
         
         # Get flights from CSV
         flights = csv_service.search_flights(limit=200)
@@ -412,18 +409,19 @@ def populate_hotels_from_csv():
                 except Exception as e2:
                     print(f"❌ Error reading CSV: {e2}")
         
-        # Also get hotels from indexed CSV data
-        csv_index_path = Path(__file__).parent.parent / "ai-recommendation" / "csv_index.db"
+        # Also get hotels from indexed CSV data (MySQL database)
         hotels_from_index = []
-        
-        if csv_index_path.exists():
-            os.environ['CSV_INDEX_DB'] = str(csv_index_path)
+        try:
             os.chdir(Path(__file__).parent.parent / "ai-recommendation")
             
+            # CSVQueryService now uses MySQL by default (kayak_csv_index database)
             from app.services.csv_query_service import CSVQueryService
-            csv_service = CSVQueryService(index_db_path=str(csv_index_path))
+            csv_service = CSVQueryService()
             hotels_from_index = csv_service.search_hotels(limit=500)
             print(f"📊 Found {len(hotels_from_index)} hotels in indexed data")
+        except Exception as e:
+            print(f"⚠️  Could not load hotels from CSV index (MySQL): {e}")
+            print("   Continuing with hotels from CSV file only...")
         
         # Combine both sources, prioritizing hotel_booking.csv
         all_hotels = hotels_from_file + hotels_from_index

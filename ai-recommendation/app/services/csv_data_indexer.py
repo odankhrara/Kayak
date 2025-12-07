@@ -32,7 +32,7 @@ class CSVDataIndexer:
         
         Args:
             data_dir: Directory containing CSV files (default: ./data/raw)
-            index_db_path: Path to index database (default: ./csv_index.db, but MySQL is used by default)
+            index_db_path: Deprecated - MySQL is the only option (uses kayak_csv_index database)
         """
         if data_dir is None:
             data_dir = os.getenv("DATASETS_DIR", "./data/raw")
