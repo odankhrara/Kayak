@@ -144,6 +144,14 @@
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.ai-bundle-card-page:hover {
+  background: #e8f0fe;
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  transform: translateY(-1px);
 }
 
 .ai-bundle-card-page h4 {

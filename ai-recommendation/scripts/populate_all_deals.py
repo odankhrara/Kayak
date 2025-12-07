@@ -23,13 +23,14 @@ def index_csv_data():
     print("=" * 60)
     
     data_dir = os.getenv("DATASETS_DIR", "./data/raw")
-    index_db = os.getenv("CSV_INDEX_DB", "./csv_index.db")
+    # MySQL CSV index database name (not file path)
+    csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{os.getenv('MYSQL_DATABASE', 'kayak')}_csv_index")
     
     print(f"Data directory: {data_dir}")
-    print(f"Index database: {index_db}")
+    print(f"CSV index database: {csv_db_name} (MySQL)")
     print()
     
-    indexer = CSVDataIndexer(data_dir=data_dir, index_db_path=index_db)
+    indexer = CSVDataIndexer(data_dir=data_dir)
     stats = indexer.index_all_datasets()
     
     print()
@@ -369,12 +370,12 @@ def main():
     print("STEP 2: Checking CSV Index")
     print("=" * 60)
     
-    index_db = os.getenv("CSV_INDEX_DB", "./csv_index.db")
-    if not Path(index_db).exists() and not os.getenv("USE_MYSQL", "true").lower() == "true":
-        print("CSV index not found. Indexing CSV files...")
-        index_csv_data()
-    else:
-        print("✅ CSV index already exists or using MySQL")
+    # MySQL is the only option - CSV index uses MySQL database (kayak_csv_index)
+    csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{os.getenv('MYSQL_DATABASE', 'kayak')}_csv_index")
+    print(f"✅ Using MySQL CSV index database: {csv_db_name}")
+    # Always index to ensure data is fresh
+    print("🔄 Indexing CSV files to MySQL...")
+    index_csv_data()
     
     # Step 3: Populate deals
     print("\n" + "=" * 60)

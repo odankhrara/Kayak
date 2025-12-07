@@ -1,5 +1,5 @@
 """CSV Query Service - Query indexed CSV data for AI agent"""
-import sqlite3
+# MySQL only - no SQLite support
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import os
@@ -19,98 +19,74 @@ class CSVQueryService:
         Initialize CSV query service
         
         Args:
-            index_db_path: Path to index database (MySQL is default, SQLite is fallback)
+            index_db_path: Deprecated - MySQL is the only option
         """
-        # Determine database type (MySQL is default for AI services)
-        self.use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
-        self.index_db_path = index_db_path or os.getenv("CSV_INDEX_DB", "./csv_index.db")
-        
+        # MySQL is the only database option
         # Initialize connection
-        self.index_db = None
         self.engine = None
         self.Session = None
         self._connect()
     
     def _connect(self):
-        """Connect to index database (SQLite or MySQL)"""
-        if self.use_mysql:
-            # Use MySQL - construct connection string from environment variables
-            mysql_host = os.getenv("MYSQL_HOST", "localhost")
-            mysql_port = os.getenv("MYSQL_PORT", "3307")
-            mysql_user = os.getenv("MYSQL_USER", "root")
-            mysql_password = os.getenv("MYSQL_PASSWORD", "password")
-            mysql_database = os.getenv("MYSQL_DATABASE", "kayak")
-            
-            # Use same database name pattern as indexer
-            csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{mysql_database}_csv_index")
-            
-            # First, ensure database exists
-            admin_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/"
-            admin_engine = create_engine(admin_url, echo=False)
-            with admin_engine.connect() as conn:
-                conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {csv_db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
-                conn.commit()
-            admin_engine.dispose()
-            
-            # Now connect to the CSV index database
-            database_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{csv_db_name}"
-            
-            try:
-                self.engine = create_engine(
-                    database_url,
-                    echo=False,
-                    pool_pre_ping=True,
-                    pool_recycle=3600
-                )
-                self.index_db = self.engine.connect()
-                print(f"✅ Connected to MySQL CSV index: {csv_db_name}")
-            except Exception as e:
-                print(f"⚠️  Failed to connect to MySQL CSV index: {e}")
-                self.index_db = None
-        else:
-            # Use SQLite (fallback only)
-            if Path(self.index_db_path).exists():
-                self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
-                self.index_db.row_factory = sqlite3.Row
-                print(f"✅ Connected to SQLite CSV index (fallback): {self.index_db_path}")
-            else:
-                print(f"⚠️  Index database not found at {self.index_db_path}. Run indexer first.")
-                self.index_db = None
+        """Connect to MySQL CSV index database"""
+        # Use MySQL - construct connection string from environment variables
+        mysql_host = os.getenv("MYSQL_HOST", "localhost")
+        mysql_port = os.getenv("MYSQL_PORT", "3307")
+        mysql_user = os.getenv("MYSQL_USER", "root")
+        mysql_password = os.getenv("MYSQL_PASSWORD", "password")
+        mysql_database = os.getenv("MYSQL_DATABASE", "kayak")
+        
+        # Use same database name pattern as indexer
+        csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{mysql_database}_csv_index")
+        
+        # First, ensure database exists
+        admin_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/"
+        admin_engine = create_engine(admin_url, echo=False)
+        with admin_engine.connect() as conn:
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {csv_db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
+            conn.commit()
+        admin_engine.dispose()
+        
+        # Now connect to the CSV index database
+        database_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{csv_db_name}"
+        
+        try:
+            self.engine = create_engine(
+                database_url,
+                echo=False,
+                pool_pre_ping=True,
+                pool_recycle=3600
+            )
+            self.Session = sessionmaker(bind=self.engine)
+            print(f"✅ Connected to MySQL CSV index: {csv_db_name}")
+        except Exception as e:
+            print(f"❌ Failed to connect to MySQL CSV index: {e}")
+            self.engine = None
+            self.Session = None
     
     def _execute_query(self, query: str, params: List[Any] = None) -> List[Any]:
         """
-        Execute query and return results (works for both SQLite and MySQL)
+        Execute query and return results using MySQL
         
         Args:
             query: SQL query string
             params: Query parameters
             
         Returns:
-            List of result rows
+            List of result rows as dictionaries
         """
-        if not self.index_db:
+        if not self.engine or not self.Session:
             return []
         
-        # Convert SQLite placeholders (?) to MySQL placeholders (%s) if needed
-        if self.use_mysql and params:
+        # Convert SQLite placeholders (?) to MySQL placeholders (%s)
+        if params:
             query = query.replace("?", "%s")
-            result = self.index_db.execute(text(query), params)
+        
+        with self.Session() as session:
+            result = session.execute(text(query), params or [])
             # Convert result to list of dicts
             columns = result.keys()
             return [dict(zip(columns, row)) for row in result.fetchall()]
-        else:
-            # SQLite
-            cursor = self.index_db.cursor()
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            rows = cursor.fetchall()
-            # Convert Row objects to dicts
-            if rows and hasattr(rows[0], 'keys'):
-                return [dict(row) for row in rows]
-            else:
-                return [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
     
     def search_hotels(
         self,
@@ -506,11 +482,6 @@ class CSVQueryService:
     
     def close(self):
         """Close database connection"""
-        if self.index_db:
-            if self.use_mysql:
-                self.index_db.close()
-                if self.engine:
-                    self.engine.dispose()
-            else:
-                self.index_db.close()
+        if self.engine:
+            self.engine.dispose()
 

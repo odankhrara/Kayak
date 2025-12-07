@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { aiRecommendationsApi } from '../api/aiRecommendationsApi';
+import { toast } from 'react-toastify';
 import './AIAssistantPage.css';
 
 interface Message {
@@ -19,6 +21,7 @@ const AIAssistantPage: React.FC = () => {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -121,6 +124,93 @@ const AIAssistantPage: React.FC = () => {
     }
   };
 
+  const handleBundleClick = async (bundle: any) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to book this bundle');
+      navigate('/login');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch full bundle details
+      let fullBundle = bundle;
+      if (!Array.isArray(bundle.flights) || bundle.flights.length === 0 || 
+          !Array.isArray(bundle.hotels) || bundle.hotels.length === 0) {
+        console.log(`Fetching full bundle details for ID: ${bundle.id}`);
+        fullBundle = await aiRecommendationsApi.getBundle(bundle.id);
+        console.log('Full bundle fetched:', fullBundle);
+      }
+
+      // Navigate to checkout with flight or hotel
+      if (fullBundle.flights && Array.isArray(fullBundle.flights) && fullBundle.flights.length > 0) {
+        const flight = fullBundle.flights[0];
+        navigate('/booking/checkout', {
+          state: {
+            bookingType: 'flight',
+            entity: {
+              flightId: flight.id || flight.flight_id,
+              airlineName: flight.airline,
+              flightNumber: flight.flight_number,
+              departureAirport: flight.origin,
+              arrivalAirport: flight.destination,
+              departureDate: flight.departure_time ? new Date(flight.departure_time).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+              arrivalDate: flight.arrival_time ? new Date(flight.arrival_time).toISOString().split('T')[0] : new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
+              pricePerTicket: flight.discounted_price || flight.original_price || 0,
+              ...flight,
+            },
+            quantity: 1,
+            checkInDate: flight.departure_time ? new Date(flight.departure_time).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            checkOutDate: flight.arrival_time ? new Date(flight.arrival_time).toISOString().split('T')[0] : new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
+            bundle: fullBundle,
+          },
+        });
+      } else if (fullBundle.hotels && Array.isArray(fullBundle.hotels) && fullBundle.hotels.length > 0) {
+        const hotel = fullBundle.hotels[0];
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const checkOut = new Date(tomorrow);
+        checkOut.setDate(checkOut.getDate() + 2);
+        const formatDate = (date: Date) => date.toISOString().split('T')[0];
+        const pricePerNight = hotel.discounted_price_per_night || hotel.original_price_per_night || 0;
+
+        navigate('/booking/checkout', {
+          state: {
+            bookingType: 'hotel',
+            entity: {
+              hotelId: hotel.id,
+              hotelName: hotel.name,
+              name: hotel.name,
+              city: hotel.city,
+              state: hotel.state || hotel.country || '',
+              country: hotel.country,
+              address: hotel.address,
+              rooms: [{
+                roomType: 'standard',
+                pricePerNight: pricePerNight,
+                available: true
+              }],
+              pricePerNight: pricePerNight,
+              ...hotel,
+            },
+            quantity: 1,
+            checkInDate: formatDate(tomorrow),
+            checkOutDate: formatDate(checkOut),
+            bundle: fullBundle,
+          },
+        });
+      } else {
+        console.warn('Bundle has no bookable items:', fullBundle);
+        toast.error('This bundle does not contain bookable items. Please try another bundle.');
+      }
+    } catch (error) {
+      console.error('Error handling bundle click:', error);
+      toast.error('Failed to load bundle details. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="ai-assistant-page">
@@ -174,14 +264,20 @@ const AIAssistantPage: React.FC = () => {
                   <div className="ai-bundles-page">
                     <p className="ai-bundles-title-page">Recommended Bundles:</p>
                     {message.bundles.map((bundle: any) => (
-                      <div key={bundle.id} className="ai-bundle-card-page">
+                      <div 
+                        key={bundle.id} 
+                        className="ai-bundle-card-page" 
+                        onClick={() => handleBundleClick(bundle)}
+                        style={{ cursor: 'pointer' }}
+                        title="Click to book this bundle"
+                      >
                         <h4>{bundle.name}</h4>
                         <p>{bundle.description}</p>
                         <div className="ai-bundle-price-page">
-                          <span className="ai-price-page">${bundle.total_price.toFixed(2)}</span>
-                          {bundle.savings > 0 && (
+                          <span className="ai-price-page">${(bundle.total_price || bundle.totalPrice || 0).toFixed(2)}</span>
+                          {(bundle.savings > 0 || bundle.savings === 0) && (
                             <span className="ai-savings-page">
-                              Save ${bundle.savings.toFixed(2)}
+                              Save ${(bundle.savings || 0).toFixed(2)}
                             </span>
                           )}
                         </div>
@@ -192,6 +288,9 @@ const AIAssistantPage: React.FC = () => {
                             ))}
                           </div>
                         )}
+                        <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
+                          Click to book →
+                        </div>
                       </div>
                     ))}
                   </div>

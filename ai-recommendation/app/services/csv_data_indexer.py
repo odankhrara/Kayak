@@ -6,7 +6,7 @@ import os
 import json
 from datetime import datetime
 from collections import defaultdict
-import sqlite3
+# MySQL only - no SQLite support
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -38,54 +38,42 @@ class CSVDataIndexer:
             data_dir = os.getenv("DATASETS_DIR", "./data/raw")
         self.data_dir = Path(data_dir)
         
-        # Determine database type and connection (MySQL is default for AI services)
-        self.use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
-        self.index_db_path = index_db_path or os.getenv("CSV_INDEX_DB", "./csv_index.db")
+        # MySQL is the only database option
+        mysql_host = os.getenv("MYSQL_HOST", "localhost")
+        mysql_port = os.getenv("MYSQL_PORT", "3307")
+        mysql_user = os.getenv("MYSQL_USER", "root")
+        mysql_password = os.getenv("MYSQL_PASSWORD", "password")
+        mysql_database = os.getenv("MYSQL_DATABASE", "kayak")
+        
+        # Use a separate database for CSV index
+        csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{mysql_database}_csv_index")
         
         # Initialize database connection
-        self.index_db = None
         self.engine = None
         self.Session = None
-        self._initialize_database()
+        self._initialize_database(csv_db_name, mysql_host, mysql_port, mysql_user, mysql_password)
     
-    def _initialize_database(self):
-        """Initialize database for indexing (SQLite or MySQL)"""
-        if self.use_mysql:
-            # Use MySQL - construct connection string from environment variables
-            mysql_host = os.getenv("MYSQL_HOST", "localhost")
-            mysql_port = os.getenv("MYSQL_PORT", "3307")
-            mysql_user = os.getenv("MYSQL_USER", "root")
-            mysql_password = os.getenv("MYSQL_PASSWORD", "password")
-            mysql_database = os.getenv("MYSQL_DATABASE", "kayak")
-            
-            # Use a separate database for CSV index or same database with different table prefix
-            csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{mysql_database}_csv_index")
-            
-            # First, connect without database to create it if it doesn't exist
-            admin_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/"
-            admin_engine = create_engine(admin_url, echo=False)
-            with admin_engine.connect() as conn:
-                conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {csv_db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
-                conn.commit()
-            admin_engine.dispose()
-            
-            # Now connect to the CSV index database
-            database_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{csv_db_name}"
-            
-            self.engine = create_engine(
-                database_url,
-                echo=False,
-                pool_pre_ping=True,
-                pool_recycle=3600
-            )
-            self.Session = sessionmaker(bind=self.engine)
-            # For compatibility, create a cursor-like interface
-            self.index_db = self.engine.connect()
-            print(f"✅ Using MySQL for CSV index: {csv_db_name}")
-        else:
-            # Use SQLite (fallback only)
-            self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
-            print(f"✅ Using SQLite for CSV index (fallback): {self.index_db_path}")
+    def _initialize_database(self, csv_db_name: str, mysql_host: str, mysql_port: str, mysql_user: str, mysql_password: str):
+        """Initialize MySQL database for indexing"""
+        # First, connect without database to create it if it doesn't exist
+        admin_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/"
+        admin_engine = create_engine(admin_url, echo=False)
+        with admin_engine.connect() as conn:
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {csv_db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
+            conn.commit()
+        admin_engine.dispose()
+        
+        # Now connect to the CSV index database
+        database_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{csv_db_name}"
+        
+        self.engine = create_engine(
+            database_url,
+            echo=False,
+            pool_pre_ping=True,
+            pool_recycle=3600
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        print(f"✅ Using MySQL for CSV index: {csv_db_name}")
         
         # Create tables for different data types
         self._execute_query("""
@@ -194,55 +182,31 @@ class CSVDataIndexer:
         self._execute_query("CREATE INDEX IF NOT EXISTS idx_airports_code ON airports(code)")
         self._execute_query("CREATE INDEX IF NOT EXISTS idx_airports_city ON airports(city)")
         self._execute_query("CREATE INDEX IF NOT EXISTS idx_routes_route ON routes(origin_airport, dest_airport)")
-        
-        if not self.use_mysql:
-            self.index_db.commit()
     
     def _execute_query(self, query: str, params: Optional[List[Any]] = None):
-        """Execute a query for both MySQL and SQLite"""
-        if self.use_mysql:
-            # For MySQL, use SQLAlchemy session
-            with self.Session() as session:
-                # Convert SQLite syntax to MySQL-compatible
-                mysql_query = query.replace("TEXT", "VARCHAR(500)").replace("REAL", "DOUBLE")
-                # Convert SQLite placeholders (?) to MySQL placeholders (%s)
-                if params:
-                    mysql_query = mysql_query.replace("?", "%s")
-                    session.execute(text(mysql_query), params)
-                else:
-                    session.execute(text(mysql_query))
-                session.commit()
-        else:
-            # For SQLite, use cursor
-            cursor = self.index_db.cursor()
+        """Execute a query using MySQL"""
+        with self.Session() as session:
+            # Convert SQLite-style syntax to MySQL-compatible
+            mysql_query = query.replace("TEXT", "VARCHAR(500)").replace("REAL", "DOUBLE")
+            # Convert SQLite placeholders (?) to MySQL placeholders (%s)
             if params:
-                cursor.execute(query, params)
+                mysql_query = mysql_query.replace("?", "%s")
+                session.execute(text(mysql_query), params)
             else:
-                cursor.execute(query)
-            self.index_db.commit()
+                session.execute(text(mysql_query))
+            session.commit()
     
     def _execute_insert(self, query: str, params: tuple):
-        """Execute an INSERT statement for both MySQL and SQLite"""
-        if self.use_mysql:
-            # For MySQL, convert SQLite syntax
-            mysql_query = query.replace("INSERT OR REPLACE", "REPLACE")
-            # If it's already an INSERT ... ON DUPLICATE KEY UPDATE, keep it as is
-            if "ON DUPLICATE KEY UPDATE" not in mysql_query:
-                mysql_query = mysql_query.replace("INSERT OR REPLACE", "REPLACE")
-            mysql_query = mysql_query.replace("?", "%s")
-            with self.Session() as session:
-                session.execute(text(mysql_query), params)
-                session.commit()
-        else:
-            # For SQLite, use cursor
-            cursor = self.index_db.cursor()
-            cursor.execute(query, params)
-            self.index_db.commit()
-    
-    def _commit(self):
-        """Commit changes (for SQLite, MySQL uses session commits)"""
-        if not self.use_mysql:
-            self.index_db.commit()
+        """Execute an INSERT statement using MySQL"""
+        # Convert SQLite syntax to MySQL
+        mysql_query = query.replace("INSERT OR REPLACE", "REPLACE")
+        # If it's already an INSERT ... ON DUPLICATE KEY UPDATE, keep it as is
+        if "ON DUPLICATE KEY UPDATE" not in mysql_query:
+            mysql_query = mysql_query.replace("INSERT OR REPLACE", "REPLACE")
+        mysql_query = mysql_query.replace("?", "%s")
+        with self.Session() as session:
+            session.execute(text(mysql_query), params)
+            session.commit()
     
     def index_all_datasets(self) -> Dict[str, Any]:
         """
@@ -355,22 +319,15 @@ class CSVDataIndexer:
                 
                 city = str(row.get("neighbourhood_cleansed") or row.get("neighbourhood_group_cleansed") or "NYC")
                 
-                # Use INSERT ... ON DUPLICATE KEY UPDATE for MySQL, INSERT OR REPLACE for SQLite
-                if self.use_mysql:
-                    query = """
-                        INSERT INTO hotels 
-                        (id, name, city, state, country, address, price_per_night, rating, amenities, room_type, latitude, longitude, source, raw_data)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON DUPLICATE KEY UPDATE
-                        name=VALUES(name), city=VALUES(city), price_per_night=VALUES(price_per_night), 
-                        rating=VALUES(rating), raw_data=VALUES(raw_data)
-                    """
-                else:
-                    query = """
-                        INSERT OR REPLACE INTO hotels 
-                        (id, name, city, state, country, address, price_per_night, rating, amenities, room_type, latitude, longitude, source, raw_data)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """
+                # Use INSERT ... ON DUPLICATE KEY UPDATE for MySQL
+                query = """
+                    INSERT INTO hotels 
+                    (id, name, city, state, country, address, price_per_night, rating, amenities, room_type, latitude, longitude, source, raw_data)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    name=VALUES(name), city=VALUES(city), price_per_night=VALUES(price_per_night), 
+                    rating=VALUES(rating), raw_data=VALUES(raw_data)
+                """
                 
                 self._execute_insert(query, (
                     listing_id,
@@ -410,7 +367,7 @@ class CSVDataIndexer:
                     continue
                 
                 self._execute_insert("""
-                    INSERT OR REPLACE INTO hotels 
+                    REPLACE INTO hotels 
                     (id, name, city, country, price_per_night, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -443,7 +400,7 @@ class CSVDataIndexer:
                     continue
                 
                 self._execute_insert("""
-                    INSERT OR REPLACE INTO hotels 
+                    REPLACE INTO hotels 
                     (id, name, city, country, price_per_night, rating, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -516,7 +473,7 @@ class CSVDataIndexer:
                         duration = 0
                 
                 self._execute_insert("""
-                    INSERT OR REPLACE INTO flights 
+                    REPLACE INTO flights 
                     (id, airline, flight_number, origin, destination, origin_city, dest_city, price, departure_time, arrival_time, duration, stops, class, available_seats, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -562,7 +519,7 @@ class CSVDataIndexer:
                 flight_id = f"{row.get('airline', '')}_{origin}_{dest}_{count}"
                 
                 self._execute_insert("""
-                    INSERT OR REPLACE INTO flights 
+                    REPLACE INTO flights 
                     (id, airline, flight_number, origin, destination, origin_city, dest_city, price, departure_time, arrival_time, duration, stops, class, available_seats, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -598,7 +555,7 @@ class CSVDataIndexer:
                 delay_id = f"{row.get('YEAR', '')}_{row.get('MONTH', '')}_{row.get('DAY_OF_MONTH', '')}_{row.get('AIRLINE', '')}_{row.get('FLIGHT_NUMBER', '')}"
                 
                 self._execute_insert("""
-                    INSERT OR REPLACE INTO flight_delays 
+                    REPLACE INTO flight_delays 
                     (id, year, month, day, airline, flight_number, origin_airport, dest_airport, departure_delay, arrival_delay, cancelled, diverted, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -637,7 +594,7 @@ class CSVDataIndexer:
                     continue
                 
                 self._execute_insert("""
-                    INSERT OR REPLACE INTO airports 
+                    REPLACE INTO airports 
                     (code, name, city, country, latitude, longitude, timezone, iata, icao, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -679,7 +636,7 @@ class CSVDataIndexer:
                 route_id = f"{row.get('airline', '')}_{origin}_{dest}_{count}"
                 
                 self._execute_insert("""
-                    INSERT OR REPLACE INTO routes 
+                    REPLACE INTO routes 
                     (id, airline, airline_id, origin_airport, dest_airport, origin_city, dest_city, stops, codeshare, equipment, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -737,6 +694,6 @@ class CSVDataIndexer:
     
     def close(self):
         """Close database connection"""
-        if self.index_db:
-            self.index_db.close()
+        if self.engine:
+            self.engine.dispose()
 

@@ -52,12 +52,10 @@ async def lifespan(app: FastAPI):
             csv_files = list(Path(data_dir).glob("*.csv"))
             
             if csv_files:
-                print(f"📊 Found {len(csv_files)} CSV files, checking indexer...")
-                index_db_path = os.getenv("CSV_INDEX_DB", "./csv_index.db")
-                if Path(index_db_path).exists():
-                    print("✅ CSV index database exists")
-                else:
-                    print("ℹ️  CSV index not found. Run: python scripts/index_all_datasets.py")
+                print(f"📊 Found {len(csv_files)} CSV files")
+                # MySQL CSV index is used (kayak_csv_index database)
+                csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{os.getenv('MYSQL_DATABASE', 'kayak')}_csv_index")
+                print(f"✅ CSV index will use MySQL database: {csv_db_name}")
             else:
                 print("ℹ️  No CSV files found in data/raw")
         except Exception as e:

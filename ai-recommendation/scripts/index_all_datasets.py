@@ -17,14 +17,15 @@ def main():
     
     # Get data directory
     data_dir = os.getenv("DATASETS_DIR", "./data/raw")
-    index_db = os.getenv("CSV_INDEX_DB", "./csv_index.db")
+    # MySQL CSV index database name (not file path)
+    csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{os.getenv('MYSQL_DATABASE', 'kayak')}_csv_index")
     
     print(f"Data directory: {data_dir}")
-    print(f"Index database: {index_db}")
+    print(f"CSV index database: {csv_db_name} (MySQL)")
     print()
     
-    # Initialize indexer
-    indexer = CSVDataIndexer(data_dir=data_dir, index_db_path=index_db)
+    # Initialize indexer (uses MySQL by default)
+    indexer = CSVDataIndexer(data_dir=data_dir)
     
     # Index all datasets
     print("🔄 Starting indexing process...")
