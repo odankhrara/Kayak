@@ -1,8 +1,12 @@
 -- Kayak Travel Booking System - MySQL Database Schema
 -- Auto-executed by Docker on container initialization
 
--- Create database (if not exists via env vars)
+-- Create main database (if not exists via env vars)
 CREATE DATABASE IF NOT EXISTS kayak CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Create CSV index database for AI recommendation service
+CREATE DATABASE IF NOT EXISTS kayak_csv_index CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 USE kayak;
 
 -- Drop tables if they exist (for clean initialization)

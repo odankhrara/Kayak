@@ -60,6 +60,16 @@ class CSVDataIndexer:
             
             # Use a separate database for CSV index or same database with different table prefix
             csv_db_name = os.getenv("CSV_INDEX_DB_NAME", f"{mysql_database}_csv_index")
+            
+            # First, connect without database to create it if it doesn't exist
+            admin_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/"
+            admin_engine = create_engine(admin_url, echo=False)
+            with admin_engine.connect() as conn:
+                conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {csv_db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
+                conn.commit()
+            admin_engine.dispose()
+            
+            # Now connect to the CSV index database
             database_url = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{csv_db_name}"
             
             self.engine = create_engine(
