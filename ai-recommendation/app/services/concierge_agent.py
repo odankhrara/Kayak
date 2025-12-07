@@ -424,6 +424,7 @@ class ConciergeAgent:
         adapts based on user context and preferences.
         
         Uses Groq (preferred) or Ollama for intelligent explanations if available.
+        Enforces ≤25 words for "Why this" explanation (per specification).
         
         Args:
             bundle: The recommended bundle
@@ -432,6 +433,13 @@ class ConciergeAgent:
             alternatives: Alternative bundles for comparison
             user_context: User's conversation context for personalized explanations
         """
+        # Use BundleSummarizer for word-limited explanations (per specification)
+        from app.services.bundle_summarizer import BundleSummarizer
+        summarizer = BundleSummarizer(self.session)
+        
+        # Generate "Why this" explanation (≤25 words)
+        why_this = summarizer._generate_why_this_pick(bundle, flights, hotels)
+        
         # Try Groq first if available (preferred)
         if self.use_groq and self.groq_service:
             try:
@@ -464,6 +472,10 @@ class ConciergeAgent:
                     bundle_info, flights_info, hotels_info, user_context=user_context
                 )
                 if explanation and not explanation.startswith("I'm currently using"):
+                    # Enforce ≤25 words limit
+                    words = explanation.split()
+                    if len(words) > 25:
+                        explanation = " ".join(words[:25])
                     return explanation
             except Exception as e:
                 print(f"[ConciergeAgent] Groq explanation failed: {e}")
@@ -500,69 +512,16 @@ class ConciergeAgent:
                     bundle_info, flights_info, hotels_info, user_context=user_context
                 )
                 if explanation and not explanation.startswith("I'm currently using"):
+                    # Enforce ≤25 words limit
+                    words = explanation.split()
+                    if len(words) > 25:
+                        explanation = " ".join(words[:25])
                     return explanation
             except Exception as e:
                 print(f"[ConciergeAgent] Ollama explanation failed: {e}")
         
-        # Fallback to rule-based explanations
-        explanations = []
-        
-        # Explain price/value tradeoff
-        if bundle.savings > 0:
-            savings_pct = (bundle.savings / (bundle.total_price + bundle.savings)) * 100
-            explanations.append(
-                f"💰 **Value**: This bundle saves you ${bundle.savings:.2f} ({savings_pct:.1f}% off) "
-                f"compared to booking separately. The total price of ${bundle.total_price:.2f} "
-                f"includes both flights and hotels."
-            )
-        
-        # Explain flight choices
-        if flights:
-            best_flight = max(flights, key=lambda f: f.deal_score)
-            explanations.append(
-                f"✈️ **Flight Choice**: I selected {best_flight.airline} because it offers "
-                f"the best deal score ({best_flight.deal_score:.1f}/100) with "
-                f"{best_flight.discount_percentage:.1f}% savings. "
-            )
-            if best_flight.available_seats < 5:
-                explanations[-1] += f"⚠️ Limited seats ({best_flight.available_seats} left) - book soon!"
-            else:
-                explanations[-1] += f"Good availability ({best_flight.available_seats} seats)."
-        
-        # Explain hotel choices
-        if hotels:
-            best_hotel = max(hotels, key=lambda h: h.deal_score)
-            explanations.append(
-                f"🏨 **Hotel Choice**: {best_hotel.name} in {best_hotel.city} offers "
-                f"excellent value with a deal score of {best_hotel.deal_score:.1f}/100. "
-            )
-            if best_hotel.rating:
-                explanations[-1] += f"Rated {best_hotel.rating:.1f}/5. "
-            if best_hotel.available_rooms < 3:
-                explanations[-1] += f"⚠️ Only {best_hotel.available_rooms} rooms left!"
-            else:
-                explanations[-1] += f"Good availability ({best_hotel.available_rooms} rooms)."
-        
-        # Explain tags/features
-        if bundle.tags:
-            tag_list = bundle.tags.split(",") if bundle.tags else []
-            if tag_list:
-                explanations.append(
-                    f"🏷️ **Features**: This bundle includes: {', '.join(tag_list[:5])}. "
-                    f"These tags help match your preferences."
-                )
-        
-        # Compare with alternatives if provided
-        if alternatives and len(alternatives) > 1:
-            cheapest = min(alternatives, key=lambda b: b.total_price)
-            if bundle.id != cheapest.id:
-                price_diff = bundle.total_price - cheapest.total_price
-                explanations.append(
-                    f"⚖️ **Tradeoff**: This bundle is ${price_diff:.2f} more than the cheapest option, "
-                    f"but offers better deal scores and features. You're paying for quality and savings."
-                )
-        
-        return "\n\n".join(explanations)
+        # Fallback to rule-based explanation (≤25 words)
+        return why_this
     
     def create_watch_from_request(
         self,

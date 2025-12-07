@@ -276,7 +276,7 @@ Hotels: {len(hotels)} hotel(s)"""
             import json
             prompt += f"\n\nUser's current preferences/context: {json.dumps(user_context)}"
         
-        prompt += "\n\nGenerate a friendly 2-3 sentence explanation highlighting the value. Be proactive and explain why this matches their needs."
+        prompt += "\n\nGenerate a friendly explanation highlighting the value in MAXIMUM 25 WORDS. Be concise and explain why this matches their needs."
         
         return self.generate(
             prompt,

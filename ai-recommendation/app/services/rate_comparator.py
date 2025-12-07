@@ -24,14 +24,15 @@ class RateComparator:
         "This is 19% below its 60-day rolling average for these dates;
          similar 4 star options nearby are $25–$60 higher per night."
         """
-        # Get historical data
+        # Get historical data (per specification: 60-day rolling average)
         listing_id = deal.name
         historical_data = PriceHistoryTracker.get_historical_data(
             self.session, "hotel", listing_id, days=days
         )
         
         current_price = deal.discounted_price_per_night
-        avg_price = historical_data.get("avg_price_30d") or historical_data.get("avg_price_60d")
+        # Prefer 60-day average (per specification), fallback to 30-day
+        avg_price = historical_data.get("avg_price_60d") or historical_data.get("avg_price_30d")
         
         comparison = {
             "current_price": current_price,

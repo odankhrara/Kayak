@@ -273,18 +273,57 @@ async def _handle_refinement(
             # Could compare prices, times, etc.
             pass
     
-    # Highlight what changed
+    # Highlight what changed (per specification: "+ $38, earlier departure, 20-minute longer connection")
     new_constraints = parsed_request.constraints or []
     old_constraints = context.get('constraints', [])
     added_constraints = [c for c in new_constraints if c not in old_constraints]
+    
+    # Compare prices with previous bundles
+    previous_price = context.get('last_bundle_price')
+    price_changes = []
     
     response_parts = [f"Updated options with your new preferences:\n"]
     if added_constraints:
         response_parts.append(f"✅ Added: {', '.join(added_constraints)}\n")
     
     for i, summary in enumerate(summaries, 1):
+        current_price = summary['price']['total']
+        change_info = []
+        
+        # Calculate price change
+        if previous_price:
+            price_diff = current_price - previous_price
+            if abs(price_diff) > 1:  # Only show if significant
+                if price_diff > 0:
+                    change_info.append(f"+ ${price_diff:.0f}")
+                else:
+                    change_info.append(f"- ${abs(price_diff):.0f}")
+        
+        # Check for flight time changes (if we had previous flights)
+        if previous_flights and flights:
+            prev_flight = previous_flights.get(bundle_list[0].id, [])
+            if prev_flight and flights:
+                prev_dep = prev_flight[0].departure_time if prev_flight else None
+                curr_dep = flights[0].departure_time if flights else None
+                if prev_dep and curr_dep:
+                    # Compare departure times
+                    if curr_dep < prev_dep:
+                        change_info.append("earlier departure")
+                    elif curr_dep > prev_dep:
+                        change_info.append("later departure")
+        
+        # Check for connection changes (if multiple flights)
+        if len(flights) > 1 and previous_flights:
+            prev_flight_count = len(previous_flights.get(bundle_list[0].id, []))
+            if prev_flight_count == 1 and len(flights) > 1:
+                change_info.append("now includes connection")
+            elif prev_flight_count > 1 and len(flights) == 1:
+                change_info.append("now direct flight")
+        
         response_parts.append(f"\n**Option {i}: {summary['name']}**")
-        response_parts.append(f"💰 ${summary['price']['total']:.2f} total")
+        response_parts.append(f"💰 ${current_price:.2f} total")
+        if change_info:
+            response_parts.append(f"📊 Changes: {', '.join(change_info)}")
         response_parts.append(f"💡 {summary['why_this_pick']}")
     
     # Update context
