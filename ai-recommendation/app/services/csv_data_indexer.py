@@ -239,15 +239,18 @@ class CSVDataIndexer:
     
     def _execute_insert(self, query: str, params: tuple):
         """Execute an INSERT statement using MySQL"""
-        # Convert SQLite syntax to MySQL
-        mysql_query = query.replace("INSERT OR REPLACE", "REPLACE")
-        # If it's already an INSERT ... ON DUPLICATE KEY UPDATE, keep it as is
-        if "ON DUPLICATE KEY UPDATE" not in mysql_query:
-            mysql_query = mysql_query.replace("INSERT OR REPLACE", "REPLACE")
-        mysql_query = mysql_query.replace("?", "%s")
-        with self.Session() as session:
-            session.execute(text(mysql_query), params)
-            session.commit()
+        # Query already uses %s placeholders for MySQL
+        # Use raw connection for proper parameter binding
+        raw_conn = self.engine.raw_connection()
+        try:
+            cursor = raw_conn.cursor()
+            try:
+                cursor.execute(query, params)
+                raw_conn.commit()
+            finally:
+                cursor.close()
+        finally:
+            raw_conn.close()
     
     def index_all_datasets(self) -> Dict[str, Any]:
         """
@@ -407,9 +410,12 @@ class CSVDataIndexer:
                     continue
                 
                 self._execute_insert("""
-                    REPLACE INTO hotels 
+                    INSERT INTO hotels 
                     (id, name, city, country, price_per_night, source, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    name=VALUES(name), city=VALUES(city), price_per_night=VALUES(price_per_night), 
+                    raw_data=VALUES(raw_data)
                 """, (
                     hotel_id,
                     str(row.get("hotel", "Unknown")),
@@ -440,9 +446,12 @@ class CSVDataIndexer:
                     continue
                 
                 self._execute_insert("""
-                    REPLACE INTO hotels 
+                    INSERT INTO hotels 
                     (id, name, city, country, price_per_night, rating, source, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    name=VALUES(name), city=VALUES(city), price_per_night=VALUES(price_per_night), 
+                    rating=VALUES(rating), raw_data=VALUES(raw_data)
                 """, (
                     hotel_id,
                     f"Hotel {hotel_id}",
@@ -513,9 +522,12 @@ class CSVDataIndexer:
                         duration = 0
                 
                 self._execute_insert("""
-                    REPLACE INTO flights 
+                    INSERT INTO flights 
                     (id, airline, flight_number, origin, destination, origin_city, dest_city, price, departure_time, arrival_time, duration, stops, class, available_seats, source, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    airline=VALUES(airline), origin=VALUES(origin), destination=VALUES(destination), 
+                    price=VALUES(price), raw_data=VALUES(raw_data)
                 """, (
                     flight_id,
                     airline,
@@ -559,9 +571,12 @@ class CSVDataIndexer:
                 flight_id = f"{row.get('airline', '')}_{origin}_{dest}_{count}"
                 
                 self._execute_insert("""
-                    REPLACE INTO flights 
+                    INSERT INTO flights 
                     (id, airline, flight_number, origin, destination, origin_city, dest_city, price, departure_time, arrival_time, duration, stops, class, available_seats, source, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    airline=VALUES(airline), origin=VALUES(origin), destination=VALUES(destination), 
+                    price=VALUES(price), raw_data=VALUES(raw_data)
                 """, (
                     flight_id,
                     str(row.get("airline", "") or row.get("Airline", "")),
@@ -595,9 +610,12 @@ class CSVDataIndexer:
                 delay_id = f"{row.get('YEAR', '')}_{row.get('MONTH', '')}_{row.get('DAY_OF_MONTH', '')}_{row.get('AIRLINE', '')}_{row.get('FLIGHT_NUMBER', '')}"
                 
                 self._execute_insert("""
-                    REPLACE INTO flight_delays 
+                    INSERT INTO flight_delays 
                     (id, year, month, day, airline, flight_number, origin_airport, dest_airport, departure_delay, arrival_delay, cancelled, diverted, source, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    departure_delay=VALUES(departure_delay), arrival_delay=VALUES(arrival_delay), 
+                    cancelled=VALUES(cancelled), diverted=VALUES(diverted), raw_data=VALUES(raw_data)
                 """, (
                     delay_id,
                     int(row.get("YEAR", 0)) if pd.notna(row.get("YEAR")) else None,
@@ -634,9 +652,12 @@ class CSVDataIndexer:
                     continue
                 
                 self._execute_insert("""
-                    REPLACE INTO airports 
+                    INSERT INTO airports 
                     (code, name, city, country, latitude, longitude, timezone, iata, icao, source, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    name=VALUES(name), city=VALUES(city), country=VALUES(country), 
+                    latitude=VALUES(latitude), longitude=VALUES(longitude), raw_data=VALUES(raw_data)
                 """, (
                     code,
                     str(row.get("Name", "") or row.get("name", "") or row.get("airport_name", "")),
@@ -676,9 +697,12 @@ class CSVDataIndexer:
                 route_id = f"{row.get('airline', '')}_{origin}_{dest}_{count}"
                 
                 self._execute_insert("""
-                    REPLACE INTO routes 
+                    INSERT INTO routes 
                     (id, airline, airline_id, origin_airport, dest_airport, origin_city, dest_city, stops, codeshare, equipment, source, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    airline=VALUES(airline), origin_airport=VALUES(origin_airport), 
+                    dest_airport=VALUES(dest_airport), raw_data=VALUES(raw_data)
                 """, (
                     route_id,
                     str(row.get("Airline", "") or row.get("airline", "") or row.get("airline_name", "")),
