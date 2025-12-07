@@ -291,7 +291,6 @@ class CSVDataIndexer:
                 print(f"❌ {error_msg}")
                 stats["errors"].append(error_msg)
         
-        self._commit()
         return stats
     
     def _index_file(self, csv_path: Path) -> Dict[str, int]:

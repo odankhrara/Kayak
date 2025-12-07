@@ -79,14 +79,33 @@ class CSVQueryService:
             return []
         
         # Convert SQLite placeholders (?) to MySQL placeholders (%s)
-        if params:
-            query = query.replace("?", "%s")
+        mysql_query = query.replace("?", "%s")
         
-        with self.Session() as session:
-            result = session.execute(text(query), params or [])
-            # Convert result to list of dicts
-            columns = result.keys()
-            return [dict(zip(columns, row)) for row in result.fetchall()]
+        # Use raw connection for positional parameters
+        raw_conn = self.engine.raw_connection()
+        try:
+            cursor = raw_conn.cursor()
+            try:
+                if params:
+                    cursor.execute(mysql_query, params)
+                else:
+                    cursor.execute(mysql_query)
+                
+                # Get column names
+                columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                
+                # Fetch all rows
+                rows = cursor.fetchall()
+                
+                # Convert to list of dicts
+                if rows and columns:
+                    return [dict(zip(columns, row)) for row in rows]
+                return []
+            finally:
+                cursor.close()
+                raw_conn.commit()
+        finally:
+            raw_conn.close()
     
     def search_hotels(
         self,
@@ -107,7 +126,7 @@ class CSVQueryService:
         Returns:
             List of hotel records
         """
-        if not self.index_db:
+        if not self.engine:
             return []
         
         query = "SELECT * FROM hotels WHERE 1=1"
@@ -166,7 +185,7 @@ class CSVQueryService:
         Returns:
             List of flight records
         """
-        if not self.index_db:
+        if not self.engine:
             return []
         
         query = "SELECT * FROM flights WHERE 1=1"
@@ -287,7 +306,7 @@ class CSVQueryService:
         Returns:
             List of route records
         """
-        if not self.index_db:
+        if not self.engine:
             return []
         
         query = "SELECT * FROM routes WHERE origin_airport = ? AND dest_airport = ?"
@@ -311,7 +330,7 @@ class CSVQueryService:
         Returns:
             List of delay records
         """
-        if not self.index_db:
+        if not self.engine:
             return []
         
         query = "SELECT * FROM flight_delays WHERE 1=1"
