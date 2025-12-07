@@ -35,9 +35,14 @@ pip install -r requirements.txt
 Create a `.env` file:
 
 ```env
-# Database Configuration (SQLite is default - no setup required)
-USE_MYSQL=false                    # Set to false to use SQLite (default)
-DATABASE_URL=sqlite:///./ai_recommendations.db  # SQLite database file (auto-created)
+# Database Configuration (MySQL is default for AI services)
+USE_MYSQL=true                     # MySQL is default (set to false to use SQLite fallback)
+MYSQL_HOST=localhost
+MYSQL_PORT=3307
+MYSQL_USER=root
+MYSQL_PASSWORD=password
+MYSQL_DATABASE=kayak
+CSV_INDEX_DB_NAME=kayak_csv_index  # CSV index will use this MySQL database
 
 # OR for MySQL (optional):
 # USE_MYSQL=true
@@ -58,7 +63,7 @@ KAFKA_TOPIC_RAW_FEEDS=raw_supplier_feeds
 CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 ```
 
-**Note:** SQLite3 is the default database. The database file `ai_recommendations.db` will be created automatically in the `ai-recommendation` directory when you first run the service. No database setup is required!
+**Note:** MySQL is the default database for AI services. Ensure MySQL is running and the database exists. Set `USE_MYSQL=false` to use SQLite as a fallback for development.
 
 ### Running the Service
 

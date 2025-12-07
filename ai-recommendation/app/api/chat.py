@@ -500,10 +500,12 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
                         for b in bundle_list
                     ]
                     
+                    # Generate response message with explanations
                     if bundles:
-                        response_message = f"Found {len(bundles)} great deals! Starting at ${min(b['total_price'] for b in bundles):.2f}."
+                        response_message = f"I found {len(bundles)} great deals for you! "
+                        response_message += f"Here are bundles starting at ${min(b['total_price'] for b in bundles):.2f}. "
                         
-                        # Add explanation for first bundle
+                        # Add explanation for first bundle (adaptive reasoning)
                         if bundle_list:
                             first_bundle = bundle_list[0]
                             flight_ids = [int(id) for id in first_bundle.flight_deal_ids.split(",") if id] if first_bundle.flight_deal_ids else []
@@ -516,9 +518,26 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
                             
                             concierge = ConciergeAgent(session)
                             explanation = concierge.explain_tradeoffs(
-                                first_bundle, bundle_flights, bundle_hotels, bundle_list[:3]
+                                first_bundle, bundle_flights, bundle_hotels, bundle_list[:3],
+                                user_context=context
                             )
                             response_message += f"\n\n**Why I recommend this:**\n{explanation}"
+                            
+                            # Store bundle ID in context for policy questions
+                            context_manager.get_context(session_id)['last_bundle_id'] = first_bundle.id
+                            
+                            # Update proactive concierge with user preferences for future recommendations
+                            try:
+                                from app.services.proactive_concierge import ProactiveConcierge
+                                from app.db.session import get_session
+                                session_gen = get_session()
+                                proactive_session = next(session_gen)
+                                proactive_concierge = ProactiveConcierge(proactive_session, check_interval_minutes=2)
+                                proactive_concierge.update_user_preferences(user_id, context)
+                            except Exception as e:
+                                print(f"[WebSocket] Error updating proactive concierge: {e}")
+                        
+                        response_message += "\n\nWould you like to see more details, ask about policies (refunds, pets, breakfast, etc.), or set up a price watch?"
                     else:
                         response_message = "I couldn't find matching deals. Would you like me to set up a watch to notify you when deals become available?"
                 else:

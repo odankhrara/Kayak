@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, create_engine, Session
 import os
 from typing import Generator
 
-# Database URL - MySQL for production, SQLite fallback for development
+# Database URL - MySQL is default for AI services, SQLite is fallback
 # MySQL connection: mysql+pymysql://user:password@host:port/database
 mysql_host = os.getenv("MYSQL_HOST", "localhost")
 mysql_port = os.getenv("MYSQL_PORT", "3307")
@@ -14,12 +14,12 @@ mysql_database = os.getenv("MYSQL_DATABASE", "kayak")
 # Use MySQL if DATABASE_URL is set, otherwise construct from env vars
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    # Construct MySQL URL from environment variables
+    # Construct MySQL URL from environment variables (MySQL is default)
     use_mysql = os.getenv("USE_MYSQL", "true").lower() == "true"
     if use_mysql:
         DATABASE_URL = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}"
     else:
-        # Fallback to SQLite
+        # SQLite fallback (only if explicitly disabled MySQL)
         DATABASE_URL = "sqlite:///./ai_recommendations.db"
 
 # Create engine with MySQL-specific settings
