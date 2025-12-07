@@ -28,7 +28,13 @@ class NormalizationWorker:
         
         # Normalize currency (convert to USD if needed)
         currency = raw_record.get("currency", "USD").upper()
-        price = float(raw_record.get("price", 0) or raw_record.get("price_per_night", 0) or 0)
+        # Handle price strings with commas (e.g., "50,992" -> 50992.0)
+        price_str = str(raw_record.get("price", 0) or raw_record.get("price_per_night", 0) or 0)
+        price_str = price_str.replace(",", "").replace("$", "").strip()
+        try:
+            price = float(price_str) if price_str else 0.0
+        except (ValueError, TypeError):
+            price = 0.0
         
         # Simple currency conversion (in production, use real rates)
         if currency != "USD":

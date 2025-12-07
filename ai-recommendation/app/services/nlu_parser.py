@@ -275,9 +275,9 @@ class NLUParser:
                 city = None
         
         result = {
-            'origin': origin,
-            'destination': destination,
-            'city': city or destination,
+            'origin': origin.strip().replace(',', '') if origin else None,
+            'destination': destination.strip().replace(',', '') if destination else None,
+            'city': (city or destination).strip().replace(',', '') if (city or destination) else None,
             'dates': self._extract_dates(message, message_lower),
             'budget': self._extract_budget(message_lower),
             'travelers': self._extract_travelers(message_lower),
@@ -382,7 +382,9 @@ class NLUParser:
                 after_to = to_parts[1].strip()
                 
                 # Extract first word - might be airport code (3 letters) or city name
-                first_word = after_to.split()[0] if after_to.split() else after_to
+                # Remove commas and other punctuation
+                after_to_clean = after_to.replace(',', '').replace('.', '').strip()
+                first_word = after_to_clean.split()[0] if after_to_clean.split() else after_to_clean
                 first_word_upper = first_word.upper().strip()
                 
                 # Check for airport codes first (3 uppercase letters) - before removing stop words
