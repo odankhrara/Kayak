@@ -137,9 +137,16 @@ class FeedIngestionScheduler:
         }
         
         # Generate some mock flight data
-        from app.kafka.producer import create_async_producer
+        from app.kafka.producer import create_async_producer, check_kafka_connection, get_bootstrap_servers
         import json
         from datetime import datetime, timedelta
+        
+        # Check if Kafka is available
+        bootstrap_servers = get_bootstrap_servers()
+        if not await check_kafka_connection(bootstrap_servers):
+            print(f"[FeedIngestion] ⚠️  Kafka is not available. Skipping mock feed generation.")
+            print(f"[FeedIngestion] 💡 Kafka is optional - the service will continue without it")
+            return stats
         
         producer = create_async_producer()
         kafka_topic = os.getenv("KAFKA_TOPIC_RAW_FEEDS", "raw_supplier_feeds")
@@ -192,9 +199,14 @@ class FeedIngestionScheduler:
             print(f"[FeedIngestion] Generated and sent {stats['mock_feeds_generated']} mock feeds")
             
         except Exception as e:
-            print(f"[FeedIngestion] Error generating mock feeds: {e}")
+            print(f"[FeedIngestion] ❌ Error generating mock feeds: {e}")
+            print(f"[FeedIngestion] 💡 This is non-critical - the service will continue without Kafka")
         finally:
-            await producer.stop()
+            if producer:
+                try:
+                    await producer.stop()
+                except Exception as e:
+                    print(f"[FeedIngestion] ⚠️  Error closing producer: {e}")
         
         return stats
     

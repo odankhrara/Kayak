@@ -7,8 +7,10 @@ except ImportError:
     KafkaProducer = None
 
 from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaError
 import json
 import os
+import asyncio
 from typing import Dict, Any, List
 
 
@@ -61,11 +63,56 @@ def get_bootstrap_servers() -> List[str]:
     )
 
 
+async def check_kafka_connection(bootstrap_servers: List[str], max_retries: int = 3, retry_delay: float = 2.0) -> bool:
+    """
+    Check if Kafka is accessible before creating a producer.
+    
+    Args:
+        bootstrap_servers: List of Kafka bootstrap server addresses
+        max_retries: Maximum number of connection attempts
+        retry_delay: Delay between retries in seconds
+    
+    Returns:
+        True if Kafka is accessible, False otherwise
+    """
+    for attempt in range(max_retries):
+        try:
+            # Try to create a temporary producer to test connection
+            test_producer = AIOKafkaProducer(
+                bootstrap_servers=",".join(bootstrap_servers),
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            )
+            await test_producer.start()
+            await test_producer.stop()
+            return True
+        except (KafkaError, ConnectionError, OSError) as e:
+            if attempt < max_retries - 1:
+                print(f"⚠️  Kafka connection attempt {attempt + 1} failed: {e}. Retrying in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+            else:
+                print(f"❌ Kafka connection failed after {max_retries} attempts: {e}")
+                return False
+        except Exception as e:
+            print(f"❌ Unexpected error checking Kafka connection: {e}")
+            return False
+    return False
+
+
 def create_async_producer() -> AIOKafkaProducer:
-    """Factory for an aiokafka producer using shared bootstrap configuration."""
+    """
+    Factory for an aiokafka producer using shared bootstrap configuration.
+    
+    Note: This creates the producer but doesn't start it. Call await producer.start() 
+    before using it, and ensure to call await producer.stop() when done.
+    """
+    bootstrap_servers = get_bootstrap_servers()
     return AIOKafkaProducer(
-        bootstrap_servers=",".join(get_bootstrap_servers()),
+        bootstrap_servers=",".join(bootstrap_servers),
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
         key_serializer=lambda k: k.encode("utf-8") if k else None,
+        # Connection and retry settings for aiokafka
+        request_timeout_ms=30000,  # 30 seconds - max time to wait for response
+        retry_backoff_ms=100,  # 100ms between retries
+        # Note: max_block_ms is not available in aiokafka (it's for kafka-python)
     )
 
