@@ -274,7 +274,7 @@ Respond in JSON format:
         bundle_info: Dict[str, Any],
         flights: List[Dict[str, Any]],
         hotels: List[Dict[str, Any]],
-        context: Optional[str] = None
+        user_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Generate intelligent explanation for a bundle recommendation with CSV data context
@@ -283,6 +283,7 @@ Respond in JSON format:
             bundle_info: Bundle information (price, savings, etc.)
             flights: List of flight deals
             hotels: List of hotel deals
+            user_context: User's conversation context for personalized explanations
         
         Returns:
             Natural language explanation
@@ -320,8 +321,9 @@ Hotels: {len(hotels)} hotel(s)"""
         if csv_context:
             prompt += f"\n\nAvailable data from datasets:\n{csv_context}"
         
-        if context:
-            prompt += f"\n\nUser context:{context}"
+        if user_context:
+            import json
+            prompt += f"\n\nUser's current preferences/context: {json.dumps(user_context)}"
         
         prompt += "\n\nGenerate a friendly 2-3 sentence explanation highlighting the value. Be proactive and explain why this matches their needs."
         
