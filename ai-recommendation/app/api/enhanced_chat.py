@@ -135,6 +135,22 @@ async def _handle_search(
             clarification_questions=questions
         )
     
+    # Extract dates from parsed request
+    start_date = None
+    end_date = None
+    if merged_request.dates and merged_request.dates.get('start'):
+        try:
+            from datetime import datetime
+            start_date = datetime.fromisoformat(merged_request.dates['start'])
+        except:
+            pass
+    if merged_request.dates and merged_request.dates.get('end'):
+        try:
+            from datetime import datetime
+            end_date = datetime.fromisoformat(merged_request.dates['end'])
+        except:
+            pass
+    
     # Get bundles
     concierge = ConciergeAgent(session)
     search_params = BundleSearchParams(
@@ -142,7 +158,9 @@ async def _handle_search(
         destination=merged_request.destination,
         city=merged_request.city,
         max_price=merged_request.budget,
-        tags=merged_request.constraints if merged_request.constraints else None
+        tags=merged_request.constraints if merged_request.constraints else None,
+        start_date=start_date,
+        end_date=end_date
     )
     
     bundle_list = concierge.recommend_bundles(search_params, limit=3)

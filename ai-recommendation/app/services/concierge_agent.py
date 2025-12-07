@@ -63,7 +63,9 @@ class ConciergeAgent:
         destination: Optional[str] = None,
         city: Optional[str] = None,
         max_price: Optional[float] = None,
-        preferences: Optional[Dict[str, Any]] = None
+        preferences: Optional[Dict[str, Any]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
     ) -> Bundle:
         flights = []
         hotels = []
@@ -81,6 +83,8 @@ class ConciergeAgent:
                         origin=origin,
                         destination=warm_city,
                         max_price=max_price * 0.4 if max_price else None,
+                        start_date=start_date,
+                        end_date=end_date,
                         limit=2
                     )
                     all_flights.extend(city_flights)
@@ -90,6 +94,8 @@ class ConciergeAgent:
                     origin=origin,
                     destination=destination,
                     max_price=max_price * 0.4 if max_price else None,
+                    start_date=start_date,
+                    end_date=end_date,
                     limit=3
                 )
             else:
@@ -97,6 +103,8 @@ class ConciergeAgent:
                     origin=origin,
                     destination=None,
                     max_price=max_price * 0.4 if max_price else None,
+                    start_date=start_date,
+                    end_date=end_date,
                     limit=5
                 )
         

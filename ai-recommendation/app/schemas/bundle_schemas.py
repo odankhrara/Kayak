@@ -100,4 +100,6 @@ class BundleSearchParams(BaseModel):
     city: Optional[str] = None
     max_price: Optional[float] = None
     tags: Optional[List[str]] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
 

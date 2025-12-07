@@ -1,6 +1,7 @@
 """Deal selector service - picks best deals from cache/DB"""
 from sqlmodel import Session, select
 from typing import List, Optional
+from datetime import datetime
 from app.models import FlightDeal, HotelDeal, Bundle
 from app.schemas import BundleSearchParams
 
@@ -16,6 +17,8 @@ class DealSelector:
         origin: Optional[str] = None,
         destination: Optional[str] = None,
         max_price: Optional[float] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
         limit: int = 10
     ) -> List[FlightDeal]:
         """
@@ -112,6 +115,12 @@ class DealSelector:
                 if max_price:
                     query += " AND price_per_ticket <= :max_price"
                     params['max_price'] = max_price
+                if start_date:
+                    query += " AND DATE(departure_datetime) >= DATE(:start_date)"
+                    params['start_date'] = start_date
+                if end_date:
+                    query += " AND DATE(departure_datetime) <= DATE(:end_date)"
+                    params['end_date'] = end_date
                 
                 query += " ORDER BY price_per_ticket ASC LIMIT :limit"
                 params['limit'] = limit - len(results)
