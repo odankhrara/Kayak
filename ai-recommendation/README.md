@@ -17,8 +17,8 @@ FastAPI-based AI recommendation service for the Kayak Travel Booking System. Thi
 - Python 3.11+
 - Poetry (recommended) or pip
 - Kafka running (optional - for ingestion worker)
-- **SQLite3** (default - no setup required, database file created automatically)
-- MySQL (optional - for production, set `USE_MYSQL=true`)
+- **MySQL 8.0** (required - uses `kayak` and `kayak_csv_index` databases)
+- **pymysql** Python package (for MySQL connections)
 
 ### Installation
 
@@ -35,22 +35,13 @@ pip install -r requirements.txt
 Create a `.env` file:
 
 ```env
-# Database Configuration (MySQL is default for AI services)
-USE_MYSQL=true                     # MySQL is default (set to false to use SQLite fallback)
+# Database Configuration (MySQL only)
 MYSQL_HOST=localhost
 MYSQL_PORT=3307
 MYSQL_USER=root
 MYSQL_PASSWORD=password
 MYSQL_DATABASE=kayak
 CSV_INDEX_DB_NAME=kayak_csv_index  # CSV index will use this MySQL database
-
-# OR for MySQL (optional):
-# USE_MYSQL=true
-# MYSQL_HOST=localhost
-# MYSQL_PORT=3307
-# MYSQL_USER=root
-# MYSQL_PASSWORD=password
-# MYSQL_DATABASE=kayak
 
 # AI Configuration
 USE_AI=true
@@ -63,7 +54,9 @@ KAFKA_TOPIC_RAW_FEEDS=raw_supplier_feeds
 CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 ```
 
-**Note:** MySQL is the default database for AI services. Ensure MySQL is running and the database exists. Set `USE_MYSQL=false` to use SQLite as a fallback for development.
+**Note:** MySQL is the only database option for AI services. Ensure MySQL is running and the databases exist. The service uses:
+- `kayak` database for flight_deals, hotel_deals, bundles, watches
+- `kayak_csv_index` database for indexed CSV data (flights, hotels, airports, routes)
 
 ### Running the Service
 

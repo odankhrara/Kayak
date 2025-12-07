@@ -191,7 +191,11 @@ User Message → WebSocket → NLU Parser → Concierge Agent → Bundle Creatio
 - `GROQ_API_KEY` - Groq API key for fast LLM inference
 - `USE_OLLAMA=false` - Use local Ollama instead of Groq
 - `KAFKA_BOOTSTRAP_SERVERS=localhost:9092` - Kafka connection
-- `DATABASE_URL=sqlite:///./ai_recommendations.db` - Database connection
+- `MYSQL_HOST=localhost` - MySQL host
+- `MYSQL_PORT=3307` - MySQL port
+- `MYSQL_USER=root` - MySQL user
+- `MYSQL_PASSWORD=password` - MySQL password
+- `MYSQL_DATABASE=kayak` - MySQL database name
 
 ### Intervals
 - Deal Scanner: 5 minutes (configurable)

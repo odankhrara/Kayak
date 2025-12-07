@@ -18,13 +18,17 @@ This document outlines all the scripts that need to be run for the AI Recommenda
 
 3. **Environment variables set** (in `ai-recommendation/.env`):
    ```env
-   USE_MYSQL=true
    MYSQL_HOST=localhost
    MYSQL_PORT=3307
    MYSQL_USER=root
    MYSQL_PASSWORD=password
    MYSQL_DATABASE=kayak
    CSV_INDEX_DB_NAME=kayak_csv_index
+   ```
+
+4. **Python package installed**:
+   ```bash
+   pip install pymysql
    ```
 
 ---
@@ -87,7 +91,7 @@ python scripts/populate_cars_from_datasets.py
 
 ### **Step 3: Populate AI Service Database with Deals** ⭐ **REQUIRED**
 
-This populates the AI service's own database (`ai_recommendations.db` or MySQL) with flight and hotel deals that the AI agent uses for recommendations.
+This populates the AI service's MySQL database (`kayak` database) with flight and hotel deals that the AI agent uses for recommendations.
 
 ```bash
 cd ai-recommendation
@@ -97,8 +101,8 @@ python scripts/populate_all_deals.py
 
 **What it does:**
 - Indexes CSV data (if not already done)
-- Populates `FlightDeal` table in AI service database
-- Populates `HotelDeal` table in AI service database
+- Populates `flight_deals` table in MySQL `kayak` database
+- Populates `hotel_deals` table in MySQL `kayak` database
 - Creates deals with pricing, discounts, and scores
 
 **Expected output:**
@@ -232,9 +236,9 @@ After running all scripts, you should have:
   - 200+ hotels
   - 200+ cars
 
-- **AI Service Database**:
-  - 1,000+ flight deals
-  - 500+ hotel deals
+- **AI Service Database** (MySQL `kayak` database):
+  - 1,000+ flight deals (in `flight_deals` table)
+  - 500+ hotel deals (in `hotel_deals` table)
 
 ---
 

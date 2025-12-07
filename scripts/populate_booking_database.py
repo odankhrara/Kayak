@@ -6,8 +6,7 @@ from pathlib import Path
 # Add paths
 sys.path.insert(0, str(Path(__file__).parent.parent / "ai-recommendation"))
 
-import mysql.connector
-from mysql.connector import Error
+import pymysql
 from datetime import datetime, timedelta
 import random
 import string
@@ -51,7 +50,7 @@ def populate_flights_from_csv():
         flights = csv_service.search_flights(limit=200)
         print(f"📊 Found {len(flights)} flights in CSV")
         
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = pymysql.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
         count = 0
@@ -311,7 +310,7 @@ def populate_flights_from_csv():
         print(f"✅ Inserted {count} flights into booking database")
         return count
         
-    except Error as e:
+    except Exception as e:
         print(f"❌ Database error: {e}")
         return 0
     except Exception as e:
@@ -427,7 +426,7 @@ def populate_hotels_from_csv():
         all_hotels = hotels_from_file + hotels_from_index
         print(f"🏨 Total hotels to process: {len(all_hotels)}")
         
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = pymysql.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
         count = 0
@@ -678,7 +677,7 @@ def populate_hotels_from_csv():
         print(f"✅ Inserted {count} hotels into booking database")
         return count
         
-    except Error as e:
+    except Exception as e:
         print(f"❌ Database error: {e}")
         return 0
     except Exception as e:
@@ -743,7 +742,7 @@ def populate_cars_basic():
         locations = ['Airport', 'Downtown', 'City Center', 'Hotel District', 'Shopping Mall']
         cities = ['New York', 'Los Angeles', 'Miami', 'Chicago', 'San Francisco', 'Seattle', 'Boston', 'Tokyo', 'London', 'Paris']
         
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = pymysql.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
         count = 0
@@ -794,7 +793,7 @@ def populate_cars_basic():
         print(f"✅ Inserted {count} cars into booking database")
         return count
         
-    except Error as e:
+    except Exception as e:
         print(f"❌ Database error: {e}")
         return 0
     except Exception as e:
@@ -806,10 +805,10 @@ def main():
     
     # Test connection
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = pymysql.connect(**DB_CONFIG)
         conn.close()
         print("✅ Database connection successful\n")
-    except Error as e:
+    except Exception as e:
         print(f"❌ Cannot connect to database: {e}")
         print(f"   Host: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
         print(f"   Database: {DB_CONFIG['database']}")

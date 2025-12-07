@@ -7,8 +7,7 @@ Uses real car models, rental companies, and locations from airports.csv
 import sys
 import os
 from pathlib import Path
-import mysql.connector
-from mysql.connector import Error
+import pymysql
 import pandas as pd
 import random
 from datetime import datetime
@@ -191,7 +190,7 @@ def populate_cars_from_datasets():
             ]
         
         # Connect to database
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = pymysql.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
         # Clear existing cars (optional - comment out if you want to keep existing)
@@ -301,7 +300,7 @@ def populate_cars_from_datasets():
         print(f"\n✅ Inserted {count} cars into booking database")
         return count
         
-    except Error as e:
+    except Exception as e:
         print(f"❌ Database error: {e}")
         return 0
     except Exception as e:

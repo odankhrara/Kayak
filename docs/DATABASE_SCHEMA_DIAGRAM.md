@@ -12,7 +12,7 @@ Complete database schema for Kayak Travel Booking System showing MySQL, MongoDB,
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
-│  │   MySQL 8.0     │  │   MongoDB 7.0    │  │  SQLite/SQLModel│ │
+│  │   MySQL 8.0     │  │   MongoDB 7.0    │  │  MySQL 8.0      │ │
 │  │  (Port 3307)    │  │  (Port 27017)    │  │  (AI Service)   │ │
 │  │                 │  │                  │  │                 │ │
 │  │  Transactional  │  │  Document Store │  │  AI Deals       │ │
@@ -348,7 +348,7 @@ HOTELS (1) ──────< (N) HOTEL_ROOMS
 
 ---
 
-## 🤖 AI Recommendation Service Database (SQLite/SQLModel)
+## 🤖 AI Recommendation Service Database (MySQL)
 
 ### Entity Relationship Diagram
 
@@ -513,7 +513,7 @@ MySQL (users.profile_image_id)
 5. **bundles** - AI-generated travel bundles (legacy)
 6. **watches** - Price/inventory watches (legacy)
 
-### AI Service Database (SQLite/SQLModel) (4 tables)
+### AI Service Database (MySQL) (4 tables)
 
 1. **flight_deals** - AI-processed flight deals
 2. **hotel_deals** - AI-processed hotel deals
@@ -849,4 +849,4 @@ session.exec(
 **Data Distribution:**
 - **Transactional data** → MySQL (bookings, billing, users)
 - **Analytics data** → MongoDB (logs, reviews)
-- **AI data** → SQLite (deals, bundles, watches)
+- **AI data** → MySQL `kayak` database (flight_deals, hotel_deals, bundles, watches)

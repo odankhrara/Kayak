@@ -7,10 +7,9 @@ from pathlib import Path
 # Add paths
 sys.path.insert(0, str(Path(__file__).parent.parent / "ai-recommendation"))
 
-# Try to import mysql connector
+# Try to import pymysql
 try:
-    import mysql.connector
-    from mysql.connector import Error
+    import pymysql
     MYSQL_AVAILABLE = True
 except ImportError:
     MYSQL_AVAILABLE = False
@@ -33,13 +32,13 @@ def check_mysql_database():
     print("=" * 60)
     
     if not MYSQL_AVAILABLE:
-        print("⚠️  mysql-connector-python not installed")
-        print("   Install with: pip install mysql-connector-python")
+        print("⚠️  pymysql not installed")
+        print("   Install with: pip install pymysql")
         print()
         return {'connected': False, 'error': 'module_not_installed'}
     
     try:
-        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        conn = pymysql.connect(**MYSQL_CONFIG)
         cursor = conn.cursor()
         
         # Check flights
@@ -76,7 +75,7 @@ def check_mysql_database():
             'cars': car_count
         }
         
-    except Error as e:
+    except Exception as e:
         print(f"❌ MySQL Connection Failed: {e}")
         print(f"   Host: {MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}")
         print(f"   Database: {MYSQL_CONFIG['database']}")
@@ -89,14 +88,14 @@ def check_ai_database():
     print("=" * 60)
     
     if not MYSQL_AVAILABLE:
-        print("⚠️  mysql-connector-python not installed")
-        print("   Install with: pip install mysql-connector-python")
+        print("⚠️  pymysql not installed")
+        print("   Install with: pip install pymysql")
         print()
         return {'exists': False, 'error': 'module_not_installed'}
     
     try:
         # Check if flight_deals and hotel_deals tables exist in MySQL
-        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        conn = pymysql.connect(**MYSQL_CONFIG)
         cursor = conn.cursor()
         
         # Check if tables exist
@@ -140,7 +139,7 @@ def check_ai_database():
             'hotel_deals': hotel_deals
         }
         
-    except Error as e:
+    except Exception as e:
         print(f"❌ Error reading AI database: {e}")
         print(f"   Host: {MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}")
         print(f"   Database: {MYSQL_CONFIG['database']}")
@@ -153,8 +152,8 @@ def check_csv_index():
     print("=" * 60)
     
     if not MYSQL_AVAILABLE:
-        print("⚠️  mysql-connector-python not installed")
-        print("   Install with: pip install mysql-connector-python")
+        print("⚠️  pymysql not installed")
+        print("   Install with: pip install pymysql")
         print()
         return {'exists': False, 'error': 'module_not_installed'}
     
@@ -163,7 +162,7 @@ def check_csv_index():
         csv_config = MYSQL_CONFIG.copy()
         csv_config['database'] = CSV_INDEX_DB_NAME
         
-        conn = mysql.connector.connect(**csv_config)
+        conn = pymysql.connect(**csv_config)
         cursor = conn.cursor()
         
         # Check if database exists and has tables
@@ -218,7 +217,7 @@ def check_csv_index():
             'airports': indexed_airports
         }
         
-    except Error as e:
+    except Exception as e:
         if "Unknown database" in str(e):
             print(f"❌ CSV Index database not found: {CSV_INDEX_DB_NAME}")
             print("   Run: cd ai-recommendation && python scripts/index_all_datasets.py")

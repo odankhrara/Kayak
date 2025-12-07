@@ -11,27 +11,27 @@ The AI agent cannot fetch the same flight data as the main search because **they
 - **Data Source:** Populated by `populate_booking_database.py` or direct MySQL inserts
 
 ### **AI Agent Search**
-- **Database:** SQLite (`ai_recommendations.db`)
-- **Table:** `flightdeal` (SQLModel)
+- **Database:** MySQL (`kayak` database)
+- **Table:** `flight_deals` (SQLModel)
 - **Service:** `ai-recommendation` (port 8005)
-- **Data Source:** Populated by Kafka pipeline or `populate_deals_direct.py`
+- **Data Source:** Populated by Kafka pipeline, CSV imports, or queries main `flights` table
 
 ---
 
 ## ❌ **Why They Don't Match**
 
-1. **Separate Databases:**
-   - Listing Service → MySQL
-   - AI Service → SQLite
-   - **No synchronization between them**
+1. **Unified Database:**
+   - Listing Service → MySQL `kayak` database (`flights` table)
+   - AI Service → MySQL `kayak` database (`flight_deals` table)
+   - **AI Service can query main `flights` table as fallback**
 
-2. **Different Data Models:**
-   - MySQL: `flights` table with columns like `flight_id`, `airline`, `origin`, `destination`, `price`, `departure_datetime`
-   - SQLite: `flightdeal` table with columns like `id`, `airline`, `origin`, `destination`, `discounted_price`, `departure_time`
+2. **Data Models:**
+   - Main MySQL: `flights` table with columns like `flight_id`, `airline_name`, `departure_airport`, `arrival_airport`, `price_per_ticket`, `departure_datetime`
+   - AI MySQL: `flight_deals` table with columns like `id`, `airline`, `origin`, `destination`, `discounted_price`, `departure_time`
 
-3. **Different Population Methods:**
-   - Listing Service: Direct MySQL inserts
-   - AI Service: Kafka pipeline or CSV imports
+3. **Population Methods:**
+   - Listing Service: Direct MySQL inserts to `flights` table
+   - AI Service: Kafka pipeline, CSV imports to `flight_deals` table, or queries `flights` table directly
 
 4. **Date Parsing Issues:**
    - User query: "12/15/20205" (typo: year 20205)
@@ -47,7 +47,7 @@ The AI agent cannot fetch the same flight data as the main search because **they
 
 Create a sync job that:
 - Reads from MySQL `flights` table
-- Writes to SQLite `flightdeal` table
+- Writes to MySQL `flight_deals` table
 - Runs periodically (every 5-10 minutes)
 
 **Benefits:**
@@ -57,7 +57,7 @@ Create a sync job that:
 
 **Implementation:**
 - Background worker in AI service
-- Query MySQL, convert to FlightDeal model, insert to SQLite
+- Query MySQL `flights` table, convert to FlightDeal model, insert to MySQL `flight_deals` table
 
 ---
 
@@ -134,7 +134,7 @@ Improve date parsing to:
 Create a one-time or periodic script:
 - Read all flights from MySQL
 - Convert to FlightDeal format
-- Insert into SQLite
+- Insert into MySQL `flight_deals` table
 
 **Benefits:**
 - Quick solution
@@ -163,7 +163,7 @@ User Chat (Frontend)
     ↓
 AI Service (8005)
     ↓
-SQLite Database (flightdeal table)
+MySQL Database (flight_deals table in `kayak` database)
     ↓
 Returns: Different flights (or none)
 ```
@@ -198,7 +198,7 @@ Create a sync script that:
 1. Connects to MySQL
 2. Reads flights table
 3. Converts to FlightDeal
-4. Inserts into SQLite
+4. Inserts into MySQL `flight_deals` table
 
 **Run periodically:**
 ```bash
@@ -242,12 +242,12 @@ User query: `"12/15/20205"` (typo)
 ## 📋 **Summary**
 
 **Root Cause:**
-- AI service uses SQLite (`ai_recommendations.db`)
+- AI service uses MySQL (`kayak` database)
 - Listing service uses MySQL (`kayak` database)
 - **No synchronization between them**
 
 **Quick Fix:**
-- Sync flights from MySQL to SQLite
+- Sync flights from MySQL `flights` table to MySQL `flight_deals` table
 - Run sync script periodically
 
 **Best Solution:**

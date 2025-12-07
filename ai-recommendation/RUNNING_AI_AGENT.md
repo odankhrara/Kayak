@@ -3,9 +3,10 @@
 ## Prerequisites
 
 1. **Python 3.11+** installed
-2. **SQLite3** (included with Python - no installation needed)
-3. **Kafka** (optional - for deal ingestion, service works without it)
-4. **Groq API Key** (optional, for AI-powered features)
+2. **MySQL 8.0** (required - Docker container or local installation)
+3. **pymysql** Python package (`pip install pymysql`)
+4. **Kafka** (optional - for deal ingestion, service works without it)
+5. **Groq API Key** (optional, for AI-powered features)
 
 ## Step-by-Step Setup
 
@@ -39,7 +40,8 @@ pip install -r requirements.txt
 **Key dependencies:**
 - `fastapi` - Web framework
 - `uvicorn` - ASGI server
-- `sqlmodel` - Database ORM (works with SQLite)
+- `sqlmodel` - Database ORM (works with MySQL via pymysql)
+- `pymysql` - Pure Python MySQL client
 - `groq` - Groq API client (for AI features)
 - `aiokafka` - Kafka async client (optional)
 
@@ -48,9 +50,13 @@ pip install -r requirements.txt
 Create or update `.env` file in the `ai-recommendation` directory:
 
 ```bash
-# Database Configuration - SQLite3 (Default, no setup required!)
-USE_MYSQL=false
-# SQLite database file will be created automatically as: ai_recommendations.db
+# Database Configuration - MySQL (Required)
+MYSQL_HOST=localhost
+MYSQL_PORT=3307
+MYSQL_USER=root
+MYSQL_PASSWORD=password
+MYSQL_DATABASE=kayak
+CSV_INDEX_DB_NAME=kayak_csv_index
 
 # AI Configuration
 USE_AI=true
@@ -72,26 +78,25 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 
 # CSV Data Configuration
 DATASETS_DIR=./data/raw
-CSV_INDEX_DB=./csv_index.db
 ```
 
 **Important Notes:**
-- **SQLite3 is the default** - No database server setup needed!
-- The database file `ai_recommendations.db` will be created automatically
-- Set `USE_MYSQL=false` to use SQLite (or omit `USE_MYSQL` entirely)
+- **MySQL is required** - Ensure MySQL is running (Docker or local installation)
+- The service uses `kayak` database for deals and `kayak_csv_index` for CSV index
+- Databases are created automatically if they don't exist
 - Get your Groq API key from: https://console.groq.com/
 
 ### Step 5: Database Initialization
 
-**SQLite3 Setup (Automatic):**
-- The database is created automatically when the service starts
-- Database file: `ai_recommendations.db` in the `ai-recommendation` directory
+**MySQL Setup:**
+- Ensure MySQL is running (check with `docker ps | grep mysql` or `mysql --version`)
+- The databases (`kayak` and `kayak_csv_index`) are created automatically if they don't exist
 - Tables are created automatically on first run
-- **No manual setup required!**
+- **MySQL must be accessible** at the configured host and port
 
 To verify database initialization:
 ```bash
-python3 -c "from app.db.session import create_db_and_tables; create_db_and_tables(); print('✅ SQLite database initialized')"
+python3 -c "from app.db.session import create_db_and_tables; create_db_and_tables(); print('✅ MySQL database initialized')"
 ```
 
 ### Step 6: (Optional) Index CSV Datasets
@@ -99,14 +104,14 @@ python3 -c "from app.db.session import create_db_and_tables; create_db_and_table
 If you want to use CSV data for recommendations:
 
 ```bash
-# Index CSV files into SQLite database (creates csv_index.db)
+# Index CSV files into MySQL database (kayak_csv_index)
 python3 scripts/index_all_datasets.py
 
 # Populate deals from CSV
 python3 scripts/populate_all_datasets.py
 ```
 
-**Note:** This creates a separate SQLite database (`csv_index.db`) for fast CSV queries.
+**Note:** This creates/updates the MySQL database `kayak_csv_index` for fast CSV queries.
 
 ### Step 7: Start the AI Agent Service
 
@@ -164,22 +169,24 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 ```
 
-## SQLite Database Files
+## MySQL Databases
 
-The service uses SQLite3 and creates these database files:
+The service uses MySQL and connects to these databases:
 
-1. **`ai_recommendations.db`** - Main database for:
-   - Flight deals
-   - Hotel deals
-   - Bundles
-   - Watches
-   - Price history
+1. **`kayak` database** - Main database for:
+   - `flight_deals` - AI-processed flight deals
+   - `hotel_deals` - AI-processed hotel deals
+   - `bundles` - Travel bundles (flight + hotel combinations)
+   - `watches` - Price/inventory watches
+   - `price_history` - Historical price data
 
-2. **`csv_index.db`** - CSV data index (created by indexing script):
-   - Fast queries on CSV datasets
-   - Used for fallback when database is empty
+2. **`kayak_csv_index` database** - CSV data index (created by indexing script):
+   - `flights` - Indexed flight data from CSV
+   - `hotels` - Indexed hotel data from CSV
+   - `airports` - Airport information
+   - `routes` - Flight routes
 
-**Location:** Both files are created in the `ai-recommendation` directory.
+**Location:** Both databases are in MySQL server (default: localhost:3307).
 
 ## Service Endpoints
 
@@ -242,37 +249,6 @@ The AI agent automatically starts these background workers:
 6. **Event Emitter** - Emits deal events
 7. **Proactive Concierge** - Pushes recommendations every 2 minutes
 
-## SQLite Configuration
-
-### Default Configuration (SQLite3)
-
-The service uses SQLite3 by default. To ensure SQLite is used:
-
-```bash
-# In .env file:
-USE_MYSQL=false
-# OR simply don't set USE_MYSQL at all
-```
-
-### Database Location
-
-- **Main Database**: `./ai_recommendations.db` (in ai-recommendation directory)
-- **CSV Index**: `./csv_index.db` (created by indexing script)
-
-### Switching to MySQL (Optional)
-
-If you want to use MySQL instead:
-
-```bash
-# In .env file:
-USE_MYSQL=true
-MYSQL_HOST=localhost
-MYSQL_PORT=3307
-MYSQL_USER=root
-MYSQL_PASSWORD=your_password
-MYSQL_DATABASE=kayak
-```
-
 ## Troubleshooting
 
 ### Issue: Port 8005 already in use
@@ -285,17 +261,21 @@ lsof -ti :8005 | xargs kill -9
 uvicorn app.main:app --reload --port 8006
 ```
 
-### Issue: SQLite database not created
+### Issue: MySQL connection failed
 
-- Check write permissions in the `ai-recommendation` directory
-- Ensure Python has write access
-- The database is created automatically on first run
+- Check MySQL is running: `docker ps | grep mysql` or `mysql --version`
+- Verify connection settings in `.env` file
+- Ensure MySQL user has permissions to create databases
+- Check firewall/network settings if connecting to remote MySQL
 
-### Issue: Database locked error
+### Issue: Database not found
 
-- SQLite uses file-based locking
-- Ensure only one instance of the service is running
-- Check if another process is accessing the database file
+- Databases (`kayak` and `kayak_csv_index`) are created automatically
+- If creation fails, create manually:
+  ```sql
+  CREATE DATABASE IF NOT EXISTS kayak CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE DATABASE IF NOT EXISTS kayak_csv_index CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  ```
 
 ### Issue: Groq API errors
 
@@ -338,7 +318,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # 4. Ensure .env file exists with GROQ_API_KEY
-#    (SQLite is default - no database setup needed!)
+#    (MySQL is required - ensure MySQL is running)
 
 # 5. Start service
 uvicorn app.main:app --reload --port 8005
@@ -358,7 +338,7 @@ The AI agent runs independently but integrates with the main Kayak application:
 2. **Check proactive recommendations** - they appear every 2 minutes
 3. **Monitor deal scanner** - new deals discovered every 5 minutes
 4. **View logs** - check console output for worker activity
-5. **Check database** - SQLite file `ai_recommendations.db` contains all data
+5. **Check database** - MySQL database `kayak` contains all data (flight_deals, hotel_deals, bundles)
 
 ## Additional Resources
 
@@ -366,7 +346,7 @@ The AI agent runs independently but integrates with the main Kayak application:
 - **Groq Integration**: See `GROQ_INTEGRATION.md`
 - **API Documentation**: http://localhost:8005/docs (when running)
 
-## SQLite Advantages
+## MySQL Advantages
 
 ✅ **No setup required** - Works out of the box  
 ✅ **No server needed** - File-based database  

@@ -109,12 +109,12 @@ A distributed, microservices-based travel booking platform simulating Kayak's co
 |------------|---------|-----------------|
 | **MySQL 8.0** | 8.0 | ACID transactions, relational integrity, perfect for bookings and payments |
 | **MongoDB 6.0** | 6.0 | Flexible schema for logs/analytics, horizontal scaling, high write throughput |
-| **SQLite** | 3+ | Lightweight embedded database for AI service, no server required |
+| **MySQL 8.0** | 8.0 | Primary database for all services including AI service (kayak and kayak_csv_index databases) |
 
 **Why Hybrid Approach:**
-- **MySQL**: Critical for transactional data (bookings, payments) requiring ACID guarantees
+- **MySQL**: Critical for transactional data (bookings, payments) requiring ACID guarantees, and AI service data
 - **MongoDB**: Perfect for semi-structured data (logs, reviews, analytics) with evolving schemas
-- **SQLite**: Zero-configuration database for AI service, fast local queries
+- **MySQL (AI Service)**: Unified database infrastructure for AI service (flight_deals, hotel_deals, CSV index)
 
 ### Infrastructure & DevOps
 
@@ -186,9 +186,9 @@ A distributed, microservices-based travel booking platform simulating Kayak's co
 │        ┌────────────┼────────────┬──────────────┐                │
 │        ▼            ▼            ▼              ▼                │
 │   ┌────────┐  ┌─────────┐  ┌─────────┐   ┌─────────┐             │
-│   │ MySQL  │  │ MongoDB │  │  Redis  │   │ SQLite │             │
+│   │ MySQL  │  │ MongoDB │  │  Redis  │   │ MySQL  │             │
 │   │ :3307  │  │ :27017  │  │ :6379   │   │(AI DB) │             │
-│   │(RDBMS) │  │(NoSQL)  │  │(Cache)  │   │        │             │
+│   │(RDBMS) │  │(NoSQL)  │  │(Cache)  │   │(RDBMS) │             │
 │   └────────┘  └─────────┘  └─────────┘   └─────────┘             │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -495,12 +495,13 @@ npm run dev
 - Popular listings cache
 - Analytics aggregations
 
-### SQLite (AI Service Database)
-**Why SQLite:**
-- Zero-configuration, no server required
-- Fast local queries
-- Perfect for AI service's deal storage
-- File-based, easy to backup
+### MySQL (AI Service Database)
+**Why MySQL:**
+- Unified database infrastructure with main booking system
+- ACID transactions for reliable deal storage
+- Production-ready with concurrent access support
+- Shared infrastructure with main application
+- Uses `kayak` database for deals and `kayak_csv_index` for CSV data
 
 **Tables:**
 - `flight_deals` - AI-processed flight deals (1,004+ records)

@@ -22,9 +22,9 @@
   - **7,191 airports** indexed
 - **Purpose**: Fast search for AI agent
 
-### AI Service Database (SQLite)
+### AI Service Database (MySQL)
 - **Status**: ✅ **WELL POPULATED** (Updated!)
-- **Location**: `ai-recommendation/ai_recommendations.db`
+- **Location**: MySQL `kayak` database
 - **Current Data**:
   - **1,004+ flight deals** ✅ (was 4, now 1,004+ after removing duplicate checks!)
   - **581+ hotel deals** ✅

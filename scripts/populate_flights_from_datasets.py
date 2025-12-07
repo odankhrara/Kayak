@@ -7,8 +7,7 @@ This script reads the real CSV datasets and creates flight records in the MySQL 
 import sys
 import os
 from pathlib import Path
-import mysql.connector
-from mysql.connector import Error
+import pymysql
 import pandas as pd
 import random
 from datetime import datetime, timedelta
@@ -171,7 +170,7 @@ def populate_flights_from_datasets():
             return 0
         
         # Connect to database
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = pymysql.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
         # Clear existing flights (optional - comment out if you want to keep existing)
@@ -316,7 +315,7 @@ def populate_flights_from_datasets():
         print(f"\n✅ Inserted {count} flights into booking database")
         return count
         
-    except Error as e:
+    except Exception as e:
         print(f"❌ Database error: {e}")
         return 0
     except Exception as e:
