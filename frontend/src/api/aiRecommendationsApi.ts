@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8005'
+const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000'
 const API_BASE_URL = '/api/ai'
 
 export interface Bundle {
@@ -35,7 +35,8 @@ export const aiRecommendationsApi = {
   },
 
   getBundle: async (id: number): Promise<Bundle> => {
-    const response = await axios.get(`${API_BASE_URL}/bundles/${id}`)
+    // Use direct AI service URL to avoid API Gateway proxy issues
+    const response = await axios.get(`${AI_SERVICE_URL}/bundles/${id}`)
     return response.data
   },
 

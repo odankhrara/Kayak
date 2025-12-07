@@ -122,10 +122,31 @@ async def get_bundle(
     flight_ids = [int(id) for id in bundle.flight_deal_ids.split(",") if id.strip()]
     hotel_ids = [int(id) for id in bundle.hotel_deal_ids.split(",") if id.strip()]
     
-    flights = [FlightDealResponse.model_validate(session.get(FlightDeal, fid))
-               for fid in flight_ids if session.get(FlightDeal, fid)]
-    hotels = [HotelDealResponse.model_validate(session.get(HotelDeal, hid))
-              for hid in hotel_ids if session.get(HotelDeal, hid)]
+    # Convert flight deals to response format
+    flights = []
+    for fid in flight_ids:
+        flight = session.get(FlightDeal, fid)
+        if flight:
+            flight_dict = flight.model_dump()
+            # Convert tags string to list
+            if flight_dict.get('tags') and isinstance(flight_dict['tags'], str):
+                flight_dict['tags'] = [tag.strip() for tag in flight_dict['tags'].split(",") if tag.strip()]
+            elif not flight_dict.get('tags'):
+                flight_dict['tags'] = []
+            flights.append(FlightDealResponse.model_validate(flight_dict))
+    
+    # Convert hotel deals to response format
+    hotels = []
+    for hid in hotel_ids:
+        hotel = session.get(HotelDeal, hid)
+        if hotel:
+            hotel_dict = hotel.model_dump()
+            # Convert tags string to list
+            if hotel_dict.get('tags') and isinstance(hotel_dict['tags'], str):
+                hotel_dict['tags'] = [tag.strip() for tag in hotel_dict['tags'].split(",") if tag.strip()]
+            elif not hotel_dict.get('tags'):
+                hotel_dict['tags'] = []
+            hotels.append(HotelDealResponse.model_validate(hotel_dict))
     
     response = BundleResponse(
         id=bundle.id,

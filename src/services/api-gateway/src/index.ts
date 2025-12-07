@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
       listingService: 'http://localhost:8002',
       bookingService: 'http://localhost:8003',
       analyticsService: 'http://localhost:8004',
-      aiRecommendation: 'http://localhost:8005',
+      aiRecommendation: 'http://localhost:8000',
       adminService: 'http://localhost:8006'
     }
   })
