@@ -18,7 +18,10 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     healthcheck:
       test:
@@ -26,7 +29,7 @@ services:
           "CMD",
           "kafka-broker-api-versions",
           "--bootstrap-server",
-          "localhost:9092",
+          "kafka:9092",
         ]
       interval: 10s
       timeout: 5s
@@ -112,12 +115,13 @@ services:
       MYSQL_USER: kayak
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: kayak
-      REDIS_HOST: redis
-      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
     depends_on:
       - mysql
       - redis
       - kafka
+    command: sh -c "sleep 50 && npm start"
 
   booking-billing-service:
     build:
@@ -134,7 +138,7 @@ services:
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: kayak
       MONGODB_URI: mongodb://mongodb:27017/kayak
-      KAFKA_BROKERS: kafka:9092
+      KAFKA_BROKERS: kafka:29092
     depends_on:
       - mysql
       - mongodb
@@ -194,7 +198,7 @@ services:
       # AI_SERVICE_URL: http://ai-service:8005 # Uncomment if AI service is added
       ADMIN_SERVICE_URL: http://admin-service:8006
       JWT_SECRET: your_jwt_secret # IMPORTANT: Set this in production!
-      KAFKA_BROKERS: kafka:9092
+      KAFKA_BROKERS: kafka:29092
     depends_on:
       - user-service
       - listing-service

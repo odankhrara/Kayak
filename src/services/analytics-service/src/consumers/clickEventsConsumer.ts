@@ -33,30 +33,32 @@ export class ClickEventsConsumer {
   }
 
   private async consume() {
-    await this.consumer.run({
-      eachMessage: async ({ topic, partition, message }) => {
-        try {
-          if (!message.value) return
-
-          const eventData = JSON.parse(message.value.toString())
-          
-          // Store in MongoDB logs collection
-          const db = await getMongoDb()
-          const logsCollection = db.collection('logs')
-
-          await logsCollection.insertOne({
-            ...eventData,
-            log_type: 'click',
-            timestamp: eventData.timestamp ? new Date(eventData.timestamp) : new Date(),
-            created_at: new Date()
-          })
-
-          console.log(`Click event stored: ${eventData.element_id || 'unknown'}`)
-        } catch (error) {
-          console.error('Error processing click event:', error)
+    if (this.consumer) {
+      await this.consumer.run({
+        eachMessage: async ({ topic, partition, message }) => {
+          try {
+            if (!message.value) return
+  
+            const eventData = JSON.parse(message.value.toString())
+            
+            // Store in MongoDB logs collection
+            const db = await getMongoDb()
+            const logsCollection = db.collection('logs')
+  
+            await logsCollection.insertOne({
+              ...eventData,
+              log_type: 'click',
+              timestamp: eventData.timestamp ? new Date(eventData.timestamp) : new Date(),
+              created_at: new Date()
+            })
+  
+            console.log(`Click event stored: ${eventData.element_id || 'unknown'}`)
+          } catch (error) {
+            console.error('Error processing click event:', error)
+          }
         }
-      }
-    })
+      })
+    }
   }
 
   async stop() {
