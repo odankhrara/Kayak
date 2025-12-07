@@ -92,7 +92,7 @@ services:
       MYSQL_USER: kayak
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: kayak
-      JWT_SECRET: your_admin_jwt_secret
+      JWT_SECRET: your-secret-key
     depends_on:
       - mysql
 
@@ -112,6 +112,7 @@ services:
       MYSQL_DATABASE: kayak
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:29092
+      JWT_SECRET: your-secret-key
     depends_on:
       - mysql
       - redis
@@ -175,6 +176,7 @@ services:
       MYSQL_USER: kayak
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: kayak
+      JWT_SECRET: your-secret-key
 
   api-gateway:
     build:
@@ -192,7 +194,7 @@ services:
       ANALYTICS_SERVICE_URL: http://analytics-service:8004
       # AI_SERVICE_URL: http://ai-service:8005 # Uncomment if AI service is added
       ADMIN_SERVICE_URL: http://admin-service:8006
-      JWT_SECRET: your_jwt_secret # IMPORTANT: Set this in production!
+      JWT_SECRET: your-secret-key # IMPORTANT: Set this in production!
       KAFKA_BROKERS: kafka:29092
     depends_on:
       - user-service
