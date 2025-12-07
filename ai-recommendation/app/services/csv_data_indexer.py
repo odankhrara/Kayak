@@ -174,14 +174,15 @@ class CSVDataIndexer:
         """)
         
         # Create indexes for fast searching
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_hotels_city ON hotels(city)")
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_hotels_price ON hotels(price_per_night)")
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_flights_origin ON flights(origin)")
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_flights_dest ON flights(destination)")
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_flights_route ON flights(origin, destination)")
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_airports_code ON airports(code)")
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_airports_city ON airports(city)")
-        self._execute_query("CREATE INDEX IF NOT EXISTS idx_routes_route ON routes(origin_airport, dest_airport)")
+        # MySQL doesn't support IF NOT EXISTS for CREATE INDEX, so we check first
+        self._create_index_if_not_exists("idx_hotels_city", "hotels", "city")
+        self._create_index_if_not_exists("idx_hotels_price", "hotels", "price_per_night")
+        self._create_index_if_not_exists("idx_flights_origin", "flights", "origin")
+        self._create_index_if_not_exists("idx_flights_dest", "flights", "destination")
+        self._create_index_if_not_exists("idx_flights_route", "flights", "origin, destination")
+        self._create_index_if_not_exists("idx_airports_code", "airports", "code")
+        self._create_index_if_not_exists("idx_airports_city", "airports", "city")
+        self._create_index_if_not_exists("idx_routes_route", "routes", "origin_airport, dest_airport")
     
     def _execute_query(self, query: str, params: Optional[List[Any]] = None):
         """Execute a query using MySQL"""
@@ -195,6 +196,46 @@ class CSVDataIndexer:
             else:
                 session.execute(text(mysql_query))
             session.commit()
+    
+    def _create_index_if_not_exists(self, index_name: str, table_name: str, columns: str):
+        """Create an index if it doesn't exist (MySQL-compatible)"""
+        with self.Session() as session:
+            try:
+                # Get current database name
+                db_name_query = text("SELECT DATABASE()")
+                db_result = session.execute(db_name_query).fetchone()
+                db_name = db_result[0] if db_result else None
+                
+                if not db_name:
+                    # Fallback: try to get from connection URL
+                    db_name = os.getenv("CSV_INDEX_DB_NAME", f"{os.getenv('MYSQL_DATABASE', 'kayak')}_csv_index")
+                
+                # Check if index exists
+                check_query = text("""
+                    SELECT COUNT(*) as count
+                    FROM information_schema.statistics
+                    WHERE table_schema = :db_name
+                    AND table_name = :table_name
+                    AND index_name = :index_name
+                """)
+                result = session.execute(check_query, {
+                    "db_name": db_name,
+                    "table_name": table_name,
+                    "index_name": index_name
+                }).fetchone()
+                
+                if result and result[0] == 0:
+                    # Index doesn't exist, create it
+                    create_query = text(f"CREATE INDEX {index_name} ON {table_name}({columns})")
+                    session.execute(create_query)
+                    session.commit()
+                    print(f"✅ Created index {index_name} on {table_name}")
+                else:
+                    print(f"ℹ️  Index {index_name} already exists on {table_name}")
+            except Exception as e:
+                # If index creation fails, log but don't crash
+                print(f"⚠️  Could not create index {index_name} on {table_name}: {e}")
+                session.rollback()
     
     def _execute_insert(self, query: str, params: tuple):
         """Execute an INSERT statement using MySQL"""
