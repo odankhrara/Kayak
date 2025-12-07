@@ -3,7 +3,7 @@ import asyncio
 import os
 from pathlib import Path
 from app.data.csv_processor import CSVProcessor
-from app.kafka.producer import KafkaProducerClient
+from app.kafka.producer import create_async_producer
 from typing import Dict, Any
 import json
 
@@ -23,7 +23,7 @@ class DatasetLoader:
     ):
         """Load dataset and publish to Kafka"""
         if not self.producer:
-            self.producer = KafkaProducerClient()
+            self.producer = create_async_producer()
             await self.producer.start()
         
         try:
@@ -49,16 +49,19 @@ class DatasetLoader:
             raise
         finally:
             if self.producer:
-                await self.producer.close()
+                await self.producer.stop()
     
     async def _publish_batch(self, batch: list[Dict[str, Any]]):
         """Publish a batch of records to Kafka"""
         for record in batch:
             try:
+                key = record.get("listing_id") or record.get("flight_number") or "unknown"
+                # AIOKafkaProducer's value_serializer already handles JSON encoding
+                # Just pass the dict directly - it will be serialized by the producer
                 await self.producer.send(
                     topic=self.kafka_topic,
-                    key=record.get("listing_id") or record.get("flight_number") or "unknown",
-                    value=json.dumps(record)
+                    key=key if key else None,
+                    value=record  # Pass dict directly, serializer handles encoding
                 )
             except Exception as e:
                 print(f"Error publishing record: {e}")
