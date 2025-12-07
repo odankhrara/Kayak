@@ -25,12 +25,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     healthcheck:
       test:
-        [
-          "CMD",
-          "kafka-broker-api-versions",
-          "--bootstrap-server",
-          "kafka:9092",
-        ]
+        ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:9092"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -194,7 +189,7 @@ services:
       USER_SERVICE_URL: http://user-service:8001
       LISTING_SERVICE_URL: http://listing-service:8002
       BOOKING_BILLING_SERVICE_URL: http://booking-billing-service:8003
-      # ANALYTICS_SERVICE_URL: http://analytics-service:8004 # Uncomment if analytics-service is added back
+      ANALYTICS_SERVICE_URL: http://analytics-service:8004
       # AI_SERVICE_URL: http://ai-service:8005 # Uncomment if AI service is added
       ADMIN_SERVICE_URL: http://admin-service:8006
       JWT_SECRET: your_jwt_secret # IMPORTANT: Set this in production!
@@ -205,7 +200,7 @@ services:
       - booking-billing-service
       - admin-service
       - kafka
-      # - analytics-service # Uncomment if analytics-service is added back
+      - analytics-service
       # - ai-service # Uncomment if AI service is added
     command: sh -c "sleep 50 && npm start"
 
