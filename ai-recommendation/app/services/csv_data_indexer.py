@@ -77,10 +77,8 @@ class CSVDataIndexer:
             self.index_db = sqlite3.connect(self.index_db_path, check_same_thread=False)
             print(f"✅ Using SQLite for CSV index (fallback): {self.index_db_path}")
         
-        cursor = self._get_cursor()
-        
         # Create tables for different data types
-        cursor.execute("""
+        self._execute_query("""
             CREATE TABLE IF NOT EXISTS hotels (
                 id TEXT PRIMARY KEY,
                 name TEXT,
@@ -100,7 +98,7 @@ class CSVDataIndexer:
             )
         """)
         
-        cursor.execute("""
+        self._execute_query("""
             CREATE TABLE IF NOT EXISTS flights (
                 id TEXT PRIMARY KEY,
                 airline TEXT,
@@ -122,7 +120,7 @@ class CSVDataIndexer:
             )
         """)
         
-        cursor.execute("""
+        self._execute_query("""
             CREATE TABLE IF NOT EXISTS airports (
                 code TEXT PRIMARY KEY,
                 name TEXT,
@@ -139,7 +137,7 @@ class CSVDataIndexer:
             )
         """)
         
-        cursor.execute("""
+        self._execute_query("""
             CREATE TABLE IF NOT EXISTS routes (
                 id TEXT PRIMARY KEY,
                 airline TEXT,
@@ -157,7 +155,7 @@ class CSVDataIndexer:
             )
         """)
         
-        cursor.execute("""
+        self._execute_query("""
             CREATE TABLE IF NOT EXISTS flight_delays (
                 id TEXT PRIMARY KEY,
                 year INTEGER,
@@ -178,16 +176,63 @@ class CSVDataIndexer:
         """)
         
         # Create indexes for fast searching
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hotels_city ON hotels(city)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hotels_price ON hotels(price_per_night)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flights_origin ON flights(origin)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flights_dest ON flights(destination)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flights_route ON flights(origin, destination)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_airports_code ON airports(code)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_airports_city ON airports(city)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_routes_route ON routes(origin_airport, dest_airport)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_hotels_city ON hotels(city)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_hotels_price ON hotels(price_per_night)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_flights_origin ON flights(origin)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_flights_dest ON flights(destination)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_flights_route ON flights(origin, destination)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_airports_code ON airports(code)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_airports_city ON airports(city)")
+        self._execute_query("CREATE INDEX IF NOT EXISTS idx_routes_route ON routes(origin_airport, dest_airport)")
         
-        self.index_db.commit()
+        if not self.use_mysql:
+            self.index_db.commit()
+    
+    def _execute_query(self, query: str, params: Optional[List[Any]] = None):
+        """Execute a query for both MySQL and SQLite"""
+        if self.use_mysql:
+            # For MySQL, use SQLAlchemy session
+            with self.Session() as session:
+                # Convert SQLite syntax to MySQL-compatible
+                mysql_query = query.replace("TEXT", "VARCHAR(500)").replace("REAL", "DOUBLE")
+                # Convert SQLite placeholders (?) to MySQL placeholders (%s)
+                if params:
+                    mysql_query = mysql_query.replace("?", "%s")
+                    session.execute(text(mysql_query), params)
+                else:
+                    session.execute(text(mysql_query))
+                session.commit()
+        else:
+            # For SQLite, use cursor
+            cursor = self.index_db.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            self.index_db.commit()
+    
+    def _execute_insert(self, query: str, params: tuple):
+        """Execute an INSERT statement for both MySQL and SQLite"""
+        if self.use_mysql:
+            # For MySQL, convert SQLite syntax
+            mysql_query = query.replace("INSERT OR REPLACE", "REPLACE")
+            # If it's already an INSERT ... ON DUPLICATE KEY UPDATE, keep it as is
+            if "ON DUPLICATE KEY UPDATE" not in mysql_query:
+                mysql_query = mysql_query.replace("INSERT OR REPLACE", "REPLACE")
+            mysql_query = mysql_query.replace("?", "%s")
+            with self.Session() as session:
+                session.execute(text(mysql_query), params)
+                session.commit()
+        else:
+            # For SQLite, use cursor
+            cursor = self.index_db.cursor()
+            cursor.execute(query, params)
+            self.index_db.commit()
+    
+    def _commit(self):
+        """Commit changes (for SQLite, MySQL uses session commits)"""
+        if not self.use_mysql:
+            self.index_db.commit()
     
     def index_all_datasets(self) -> Dict[str, Any]:
         """
@@ -317,7 +362,7 @@ class CSVDataIndexer:
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """
                 
-                self._execute(query, (
+                self._execute_insert(query, (
                     listing_id,
                     str(row.get("name", ""))[:200],
                     city,
@@ -341,7 +386,6 @@ class CSVDataIndexer:
     
     def _index_hotel_booking_data(self, df: pd.DataFrame, source: str) -> int:
         """Index Hotel Booking Demand dataset"""
-        cursor = self.index_db.cursor()
         count = 0
         
         for _, row in df.iterrows():
@@ -355,7 +399,7 @@ class CSVDataIndexer:
                 if price <= 0:
                     continue
                 
-                cursor.execute("""
+                self._execute_insert("""
                     INSERT OR REPLACE INTO hotels 
                     (id, name, city, country, price_per_night, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -376,7 +420,6 @@ class CSVDataIndexer:
     
     def _index_expedia_hotel_data(self, df: pd.DataFrame, source: str) -> int:
         """Index Expedia Hotel Recommendations dataset"""
-        cursor = self.index_db.cursor()
         count = 0
         
         for _, row in df.iterrows():
@@ -389,7 +432,7 @@ class CSVDataIndexer:
                 if price <= 0:
                     continue
                 
-                cursor.execute("""
+                self._execute_insert("""
                     INSERT OR REPLACE INTO hotels 
                     (id, name, city, country, price_per_night, rating, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -411,7 +454,6 @@ class CSVDataIndexer:
     
     def _index_flight_price_data(self, df: pd.DataFrame, source: str) -> int:
         """Index Flight Price Prediction dataset"""
-        cursor = self.index_db.cursor()
         count = 0
         
         for _, row in df.iterrows():
@@ -463,7 +505,7 @@ class CSVDataIndexer:
                     except:
                         duration = 0
                 
-                cursor.execute("""
+                self._execute_insert("""
                     INSERT OR REPLACE INTO flights 
                     (id, airline, flight_number, origin, destination, origin_city, dest_city, price, departure_time, arrival_time, duration, stops, class, available_seats, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -493,7 +535,6 @@ class CSVDataIndexer:
     
     def _index_flightprices_data(self, df: pd.DataFrame, source: str) -> int:
         """Index Flight Prices (Expedia) dataset"""
-        cursor = self.index_db.cursor()
         count = 0
         
         for _, row in df.iterrows():
@@ -510,7 +551,7 @@ class CSVDataIndexer:
                 
                 flight_id = f"{row.get('airline', '')}_{origin}_{dest}_{count}"
                 
-                cursor.execute("""
+                self._execute_insert("""
                     INSERT OR REPLACE INTO flights 
                     (id, airline, flight_number, origin, destination, origin_city, dest_city, price, departure_time, arrival_time, duration, stops, class, available_seats, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -540,14 +581,13 @@ class CSVDataIndexer:
     
     def _index_flight_delays_data(self, df: pd.DataFrame, source: str) -> int:
         """Index US Flight Delays & Cancellations dataset"""
-        cursor = self.index_db.cursor()
         count = 0
         
         for _, row in df.iterrows():
             try:
                 delay_id = f"{row.get('YEAR', '')}_{row.get('MONTH', '')}_{row.get('DAY_OF_MONTH', '')}_{row.get('AIRLINE', '')}_{row.get('FLIGHT_NUMBER', '')}"
                 
-                cursor.execute("""
+                self._execute_insert("""
                     INSERT OR REPLACE INTO flight_delays 
                     (id, year, month, day, airline, flight_number, origin_airport, dest_airport, departure_delay, arrival_delay, cancelled, diverted, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -575,7 +615,6 @@ class CSVDataIndexer:
     
     def _index_global_airports_data(self, df: pd.DataFrame, source: str) -> int:
         """Index Global Airports dataset"""
-        cursor = self.index_db.cursor()
         count = 0
         
         for _, row in df.iterrows():
@@ -587,7 +626,7 @@ class CSVDataIndexer:
                 if not code or code == "NAN" or code == "NONE":
                     continue
                 
-                cursor.execute("""
+                self._execute_insert("""
                     INSERT OR REPLACE INTO airports 
                     (code, name, city, country, latitude, longitude, timezone, iata, icao, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -612,7 +651,6 @@ class CSVDataIndexer:
     
     def _index_routes_data(self, df: pd.DataFrame, source: str) -> int:
         """Index Airlines, Airport and Routes dataset"""
-        cursor = self.index_db.cursor()
         count = 0
         
         for _, row in df.iterrows():
@@ -630,7 +668,7 @@ class CSVDataIndexer:
                 
                 route_id = f"{row.get('airline', '')}_{origin}_{dest}_{count}"
                 
-                cursor.execute("""
+                self._execute_insert("""
                     INSERT OR REPLACE INTO routes 
                     (id, airline, airline_id, origin_airport, dest_airport, origin_city, dest_city, stops, codeshare, equipment, source, raw_data)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

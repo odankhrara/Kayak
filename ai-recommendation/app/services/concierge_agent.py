@@ -459,16 +459,9 @@ class ConciergeAgent:
                     for h in hotels
                 ]
                 
-                # Include user context in explanation if available
-                context_prompt = ""
-                if user_context:
-                    if user_context.get('constraints'):
-                        context_prompt = f"\nUser preferences: {', '.join(user_context.get('constraints', []))}"
-                    if user_context.get('budget'):
-                        context_prompt += f"\nBudget: ${user_context.get('budget'):.2f}"
-                
+                # Pass user context directly to generate_explanation
                 explanation = self.groq_service.generate_explanation(
-                    bundle_info, flights_info, hotels_info, context=context_prompt
+                    bundle_info, flights_info, hotels_info, user_context=user_context
                 )
                 if explanation and not explanation.startswith("I'm currently using"):
                     return explanation
@@ -502,16 +495,9 @@ class ConciergeAgent:
                     for h in hotels
                 ]
                 
-                # Include user context in explanation if available
-                context_prompt = ""
-                if user_context:
-                    if user_context.get('constraints'):
-                        context_prompt = f"\nUser preferences: {', '.join(user_context.get('constraints', []))}"
-                    if user_context.get('budget'):
-                        context_prompt += f"\nBudget: ${user_context.get('budget'):.2f}"
-                
+                # Pass user context directly to generate_explanation
                 explanation = self.ollama_service.generate_explanation(
-                    bundle_info, flights_info, hotels_info, context=context_prompt
+                    bundle_info, flights_info, hotels_info, user_context=user_context
                 )
                 if explanation and not explanation.startswith("I'm currently using"):
                     return explanation
