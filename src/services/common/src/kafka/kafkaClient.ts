@@ -135,7 +135,6 @@ function createNullConsumer(): Consumer {
     describeGroup: async () => ({ groups: [] }),
     fetch: async () => ({ records: [] }),
     commitOffsets: async () => {},
-    seek: async () => {},
     commitOffsetsIfNecessary: async () => {}
   } as unknown as Consumer
 }
