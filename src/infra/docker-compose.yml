@@ -240,7 +240,7 @@ services:
       - admin-service
       - kafka
       - analytics-service
-      # - ai-service # Uncomment if AI service is added
+      - ai-recommendation-service
     command: sh -c "sleep 50 && npm start"
 
 volumes:
