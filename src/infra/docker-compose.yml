@@ -108,10 +108,10 @@ services:
         echo '🌱 Starting database seed...';
         sleep 8;
 
-        COUNT=$(mysql -h mysql -u root -ppassword -D kayak -se 'SELECT COUNT(*) FROM flights' 2>/dev/null || echo 0);
-        echo 'Flights count:' $COUNT;
+        COUNT=$(mysql -h mysql -u root -ppassword -D kayak -se 'SELECT COUNT(*) FROM flight_deals' 2>/dev/null || echo 0);
+        echo 'Flights count:' $$COUNT;
 
-        if [ \"$COUNT\" = \"0\" ]; then
+        if [ \"$$COUNT\" = \"0\" ]; then
           echo '📥 Seeding data...';
           python scripts/populate_booking_db_from_csv.py;
           python scripts/populate_all_deals.py;
@@ -138,15 +138,16 @@ services:
     environment:
       DOCKER_ENV: "true"
       MYSQL_HOST: mysql
-      MYSQL_PORT: 3306 # Corrected internal port for MySQL
-      MYSQL_USER: kayak
+      MYSQL_USER: root
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: kayak
+      MONGODB_URI: mongodb://mongodb:27017/kayak
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:29092
       CSV_INDEX_DB_NAME: kayak_csv_index
       USE_AI: "true"
       GROQ_API_KEY: your_groq_api_key
       GROQ_MODEL: llama-3.3-70b-versatile
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC_RAW_FEEDS: raw_supplier_feeds
       CORS_ORIGINS: http://localhost:3000,http://localhost:8000
     depends_on:
@@ -200,7 +201,7 @@ services:
       MYSQL_DATABASE: kayak
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:29092
-      JWT_SECRET: your-secret-key
+      JWT_SECRET: change-me
       MONGODB_URI: mongodb://mongodb:27017/kayak
     depends_on:
       mysql:
@@ -305,7 +306,7 @@ services:
       ANALYTICS_SERVICE_URL: http://analytics-service:8004
       AI_SERVICE_URL: http://ai-recommendation-service:8005
       ADMIN_SERVICE_URL: http://admin-service:8006
-      JWT_SECRET: your-secret-key # IMPORTANT: Set this in production!
+      JWT_SECRET: change-me
       KAFKA_BROKERS: kafka:29092
     depends_on:
       user-service:
