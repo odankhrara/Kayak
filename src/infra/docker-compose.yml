@@ -246,6 +246,25 @@ services:
       - ai-recommendation-service
     command: sh -c "sleep 50 && npm start"
 
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: kayak-frontend
+    ports:
+      - "80:80"
+    environment:
+      # In the build the app will default to the internal api-gateway hostname.
+      # You can override this with VITE_API_URL if needed.
+      VITE_API_URL: http://api-gateway:4000
+    depends_on:
+      - api-gateway
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://frontend:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   mysql_data:
   mongo_data:
