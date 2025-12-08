@@ -27,6 +27,8 @@ FastAPI-based AI recommendation service for the Kayak Travel Booking System. Thi
 poetry install
 
 # Or using pip
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -58,11 +60,21 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 - `kayak` database for flight_deals, hotel_deals, bundles, watches
 - `kayak_csv_index` database for indexed CSV data (flights, hotels, airports, routes)
 
+### Data Setup
+```bash
+source venv/bin/activate
+
+python scripts/index_all_datasets.py
+python scripts/populate_booking_db_from_csv.py
+python scripts/populate_all_deals.py
+python scripts/check_data_import_status.py
+```
+
 ### Running the Service
 
 ```bash
 # Development
-uvicorn app.main:app --reload --port 8005
+uvicorn app.main:app --reload --port 8005 --host 0.0.0.0
 
 # Production
 uvicorn app.main:app --host 0.0.0.0 --port 8005

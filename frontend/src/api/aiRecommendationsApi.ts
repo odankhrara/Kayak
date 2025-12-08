@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000'
+const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8005'
 const API_BASE_URL = '/api/ai'
 
 export interface Bundle {

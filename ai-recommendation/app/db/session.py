@@ -2,6 +2,9 @@
 from sqlmodel import SQLModel, create_engine, Session
 import os
 from typing import Generator
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Database URL - MySQL only
 # MySQL connection: mysql+pymysql://user:password@host:port/database

@@ -346,6 +346,7 @@ def main():
             print("3. Populate AI service database:")
             print("   cd ai-recommendation")
             print("   python scripts/populate_all_datasets.py\n")
+        sys.exit(1)
     else:
         print("\n✅ All data appears to be imported! You can now run the agent.")
         print("   The agent can search for:")

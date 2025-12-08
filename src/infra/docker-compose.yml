@@ -78,6 +78,45 @@ services:
       timeout: 5s
       retries: 5
 
+  ai-recommendation-service:
+    build:
+      context: ../../ai-recommendation
+      dockerfile: Dockerfile
+    container_name: kayak-ai-recommendation-service
+    ports:
+      - "8005:8005"
+    environment:
+      DOCKER_ENV: "true"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306 # Corrected internal port for MySQL
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+      CSV_INDEX_DB_NAME: kayak_csv_index
+      USE_AI: "true"
+      GROQ_API_KEY: your_groq_api_key
+      GROQ_MODEL: llama-3.3-70b-versatile
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_RAW_FEEDS: raw_supplier_feeds
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    command: >
+      bash -c "
+            sleep 5
+            echo 'Running data setup scripts...';
+            python scripts/check_data_import_status.py || (
+            python scripts/index_all_datasets.py &&
+            python scripts/populate_booking_db_from_csv.py &&
+            python scripts/populate_all_deals.py &&
+            python scripts/check_data_import_status.py)
+            echo 'Starting AI Recommendation Service...';
+            uvicorn app.main:app --host 0.0.0.0 --port 8005
+           "
+
   admin-service:
     build:
       context: ../../
@@ -190,7 +229,7 @@ services:
       LISTING_SERVICE_URL: http://listing-service:8002
       BOOKING_BILLING_SERVICE_URL: http://booking-billing-service:8003
       ANALYTICS_SERVICE_URL: http://analytics-service:8004
-      # AI_SERVICE_URL: http://ai-service:8005 # Uncomment if AI service is added
+      AI_SERVICE_URL: http://ai-recommendation-service:8005
       ADMIN_SERVICE_URL: http://admin-service:8006
       JWT_SECRET: your_jwt_secret # IMPORTANT: Set this in production!
       KAFKA_BROKERS: kafka:29092
@@ -208,4 +247,3 @@ volumes:
   mysql_data:
   mongo_data:
   redis_data:
- 
