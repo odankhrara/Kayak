@@ -78,6 +78,49 @@ services:
       timeout: 5s
       retries: 5
 
+  # Database seeding service - runs once on startup to populate MySQL
+  seed-service:
+    build:
+      context: ../../ai-recommendation
+      dockerfile: Dockerfile
+    container_name: kayak-seed-service
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: kayak
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+      CSV_INDEX_DB_NAME: kayak_csv_index
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ../../ai-recommendation/scripts:/app/scripts:ro
+      - ../../ai-recommendation/data:/app/data:ro
+    command: >
+      bash -c "
+            echo '🌱 Starting database seed service...'
+            sleep 5
+            echo '📊 Checking if database needs seeding...'
+            FLIGHTS_COUNT=\$(python scripts/check_data_import_status.py 2>/dev/null | grep -oP 'Flights: \K[0-9]+' || echo '0')
+            if [ \"\$FLIGHTS_COUNT\" = \"0\" ] || [ -z \"\$FLIGHTS_COUNT\" ]; then
+              echo '🌱 Database is empty. Starting data seeding...'
+              echo '📥 Running: index_all_datasets.py'
+              python scripts/index_all_datasets.py 2>&1 | tail -20 || echo 'ℹ️  index_all_datasets.py completed or skipped'
+              echo '📥 Running: populate_booking_db_from_csv.py'
+              python scripts/populate_booking_db_from_csv.py 2>&1 | tail -20 || echo 'ℹ️  populate_booking_db_from_csv.py completed or skipped'
+              echo '📥 Running: populate_all_deals.py'
+              python scripts/populate_all_deals.py 2>&1 | tail -20 || echo 'ℹ️  populate_all_deals.py completed or skipped'
+              echo '✅ Data seeding completed'
+            else
+              echo '✓ Database already seeded (Flights: '\$FLIGHTS_COUNT'). Skipping import.'
+            fi
+            echo '📊 Final data import status:'
+            python scripts/check_data_import_status.py 2>/dev/null || echo 'Could not verify data status'
+            echo '✅ Seed service exiting successfully'
+           "
+    restart: "no"
+
   ai-recommendation-service:
     build:
       context: ../../ai-recommendation
@@ -104,16 +147,12 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      seed-service:
+        condition: service_completed_successfully
     command: >
       bash -c "
             sleep 5
-            echo 'Running data setup scripts...';
-            python scripts/check_data_import_status.py || (
-            python scripts/index_all_datasets.py &&
-            python scripts/populate_booking_db_from_csv.py &&
-            python scripts/populate_all_deals.py &&
-            python scripts/check_data_import_status.py)
-            echo 'Starting AI Recommendation Service...';
+            echo 'Starting AI Recommendation Service...'
             uvicorn app.main:app --host 0.0.0.0 --port 8005
            "
 
@@ -133,7 +172,10 @@ services:
       MYSQL_DATABASE: kayak
       JWT_SECRET: your-secret-key
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+      seed-service:
+        condition: service_completed_successfully
 
   analytics-service:
     build:
@@ -154,9 +196,14 @@ services:
       JWT_SECRET: your-secret-key
       MONGODB_URI: mongodb://mongodb:27017/kayak
     depends_on:
-      - mysql
-      - redis
-      - kafka
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      seed-service:
+        condition: service_completed_successfully
     command: sh -c "sleep 50 && npm start"
 
   booking-billing-service:
@@ -176,9 +223,14 @@ services:
       MONGODB_URI: mongodb://mongodb:27017/kayak
       KAFKA_BROKERS: kafka:29092
     depends_on:
-      - mysql
-      - mongodb
-      - kafka
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      seed-service:
+        condition: service_completed_successfully
 
   listing-service:
     build:
@@ -197,9 +249,14 @@ services:
       MYSQL_DATABASE: kayak
       REDIS_URL: redis://redis:6379
     depends_on:
-      - mysql
-      - mongodb
-      - redis
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seed-service:
+        condition: service_completed_successfully
 
   user-service:
     build:
@@ -217,6 +274,13 @@ services:
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: kayak
       JWT_SECRET: your-secret-key
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      seed-service:
+        condition: service_completed_successfully
 
   api-gateway:
     build:
@@ -237,13 +301,22 @@ services:
       JWT_SECRET: your-secret-key # IMPORTANT: Set this in production!
       KAFKA_BROKERS: kafka:29092
     depends_on:
-      - user-service
-      - listing-service
-      - booking-billing-service
-      - admin-service
-      - kafka
-      - analytics-service
-      - ai-recommendation-service
+      user-service:
+        condition: service_started
+      listing-service:
+        condition: service_started
+      booking-billing-service:
+        condition: service_started
+      admin-service:
+        condition: service_started
+      kafka:
+        condition: service_started
+      analytics-service:
+        condition: service_started
+      ai-recommendation-service:
+        condition: service_started
+      seed-service:
+        condition: service_completed_successfully
     command: sh -c "sleep 50 && npm start"
 
   frontend:
