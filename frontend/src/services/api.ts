@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 // For Docker production builds we default to the Docker internal hostname
 // so services inside the same compose network can reach the API gateway.
 // This value is replaced at build time by Vite when `VITE_API_URL` is set.
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://api-gateway:4000';
+const BASE_URL = import.meta.env.VITE_API_URL || "http://api-gateway:4000";
 
 // Create axios instance
 const api = axios.create({
