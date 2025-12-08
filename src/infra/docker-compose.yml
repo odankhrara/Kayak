@@ -108,7 +108,7 @@ services:
         echo '🌱 Starting database seed...';
         sleep 8;
 
-        COUNT=$(mysql -h mysql -u root -ppassword -D kayak -se 'SELECT COUNT(*) FROM flight_deals' 2>/dev/null || echo 0);
+        COUNT=$(mysql -h mysql -u root -ppassword -D kayak -se 'SELECT COUNT(*) FROM flights' 2>/dev/null || echo 0);
         echo 'Flights count:' $$COUNT;
 
         if [ \"$$COUNT\" = \"0\" ]; then
