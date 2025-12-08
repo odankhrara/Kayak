@@ -6,6 +6,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --silent
 
+# Set API URL for production build
+ENV VITE_API_URL="http://34.207.109.78:4000"
+
 # Copy source and build
 COPY . .
 RUN npx tsc --noEmit || true
