@@ -15,6 +15,9 @@ from app.services.csv_query_service import CSVQueryService
 from datetime import datetime, timedelta
 import random
 import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def index_csv_data():
     """Step 1: Index all CSV files"""

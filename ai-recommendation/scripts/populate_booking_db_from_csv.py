@@ -11,6 +11,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 import random
 import string
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Database connection
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")

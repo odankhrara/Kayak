@@ -3,6 +3,7 @@
 import sys
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add paths
 sys.path.insert(0, str(Path(__file__).parent.parent / "ai-recommendation"))
@@ -13,6 +14,8 @@ try:
     MYSQL_AVAILABLE = True
 except ImportError:
     MYSQL_AVAILABLE = False
+    
+load_dotenv()
 
 # Database configurations
 MYSQL_CONFIG = {
@@ -233,7 +236,7 @@ def check_csv_files():
     print("📊 Checking CSV Files in data/raw/")
     print("=" * 60)
     
-    data_dir = Path(__file__).parent.parent / "ai-recommendation" / "data" / "raw"
+    data_dir = Path(__file__).parent.parent / "data" / "raw"
     
     if not data_dir.exists():
         print(f"❌ Data directory not found: {data_dir}")

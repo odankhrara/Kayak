@@ -3,18 +3,23 @@
 import sys
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services.csv_data_indexer import CSVDataIndexer
 
+load_dotenv()
 
 def main():
     """Index all CSV datasets"""
     print("📊 CSV Dataset Indexer")
     print("=" * 50)
     
+
+    print(os.environ.items())
+
     # Get data directory
     data_dir = os.getenv("DATASETS_DIR", "./data/raw")
     # MySQL CSV index database name (not file path)
