@@ -152,6 +152,7 @@ services:
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:29092
       JWT_SECRET: your-secret-key
+      MONGODB_URI: mongodb://mongodb:27017/kayak
     depends_on:
       - mysql
       - redis
