@@ -80,45 +80,52 @@ services:
 
   # Database seeding service - runs once on startup to populate MySQL
   seed-service:
-    build:
-      context: ../../ai-recommendation
-      dockerfile: Dockerfile
+    image: python:3.11-slim-buster
     container_name: kayak-seed-service
-    environment:
-      MYSQL_HOST: mysql
-      MYSQL_PORT: 3306
-      MYSQL_USER: kayak
-      MYSQL_PASSWORD: password
-      MYSQL_DATABASE: kayak
-      CSV_INDEX_DB_NAME: kayak_csv_index
+
     depends_on:
       mysql:
         condition: service_healthy
+
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: kayak
+
     volumes:
-      - ../../ai-recommendation/scripts:/app/scripts:ro
-      - ../../ai-recommendation/data:/app/data:ro
+      - ../../ai-recommendation/scripts:/app/scripts
+      - ../../ai-recommendation/data:/app/data
+
+    working_dir: /app
+
     command: >
       bash -c "
-            echo '🌱 Starting database seed service...'
-            sleep 5
-            echo '📊 Checking if database needs seeding...'
-            FLIGHTS_COUNT=\$(python scripts/check_data_import_status.py 2>/dev/null | grep -oP 'Flights: \K[0-9]+' || echo '0')
-            if [ \"\$FLIGHTS_COUNT\" = \"0\" ] || [ -z \"\$FLIGHTS_COUNT\" ]; then
-              echo '🌱 Database is empty. Starting data seeding...'
-              echo '📥 Running: index_all_datasets.py'
-              python scripts/index_all_datasets.py 2>&1 | tail -20 || echo 'ℹ️  index_all_datasets.py completed or skipped'
-              echo '📥 Running: populate_booking_db_from_csv.py'
-              python scripts/populate_booking_db_from_csv.py 2>&1 | tail -20 || echo 'ℹ️  populate_booking_db_from_csv.py completed or skipped'
-              echo '📥 Running: populate_all_deals.py'
-              python scripts/populate_all_deals.py 2>&1 | tail -20 || echo 'ℹ️  populate_all_deals.py completed or skipped'
-              echo '✅ Data seeding completed'
-            else
-              echo '✓ Database already seeded (Flights: '\$FLIGHTS_COUNT'). Skipping import.'
-            fi
-            echo '📊 Final data import status:'
-            python scripts/check_data_import_status.py 2>/dev/null || echo 'Could not verify data status'
-            echo '✅ Seed service exiting successfully'
-           "
+        apt-get update && apt-get install -y default-mysql-client && apt-get clean;
+        pip install pymysql pandas;
+
+        echo '🌱 Starting database seed...';
+        sleep 8;
+
+        COUNT=$(mysql -h mysql -u root -ppassword -D kayak -se 'SELECT COUNT(*) FROM flights' 2>/dev/null || echo 0);
+        echo 'Flights count:' $COUNT;
+
+        if [ \"$COUNT\" = \"0\" ]; then
+          echo '📥 Seeding data...';
+          python scripts/populate_booking_db_from_csv.py;
+          python scripts/populate_all_deals.py;
+          echo '✅ Seeding complete.';
+        else
+          echo '✓ Database already seeded.';
+        fi;
+
+        echo '📊 Final data status:';
+        python scripts/check_data_import_status.py || true;
+
+        exit 0;
+      "
+
     restart: "no"
 
   ai-recommendation-service:
