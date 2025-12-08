@@ -8,7 +8,8 @@ RUN npm ci --silent
 
 # Copy source and build
 COPY . .
-RUN npx vite build --skip-validate
+RUN npx tsc --noEmit || true
+RUN npm run build
 
 FROM nginx:stable-alpine
 
